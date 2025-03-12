@@ -4,119 +4,112 @@ import SwiftUI
 
 struct LoginView: View {
     @StateObject private var viewModel = LoginViewModel()
-    @State private var isPasswordVisible = false
-    @State private var navigateToTabView = false
-    @State private var navigateToRegister = false  // Nuevo estado para la navegación al registro
+    @State private var identifier: String = ""
+    @State private var password: String = ""
+    @State private var showRegister = false
+    @State private var showForgotPassword = false
     
     var body: some View {
         NavigationStack {
-            ZStack {
-                // Fondo
-                Color(.systemGray6)
-                    .ignoresSafeArea()
-                
-                VStack(spacing: 20) {
-                    // Logo
-                    VStack(spacing: 0) {
-                        Text("Team")
-                            .font(.system(size: 40, weight: .bold)) +
-                        Text("UP")
-                            .font(.system(size: 40, weight: .bold))
-                            .foregroundColor(Color(red: 0.9, green: 0.3, blue: 0.2))
-                    }
-                    .padding(.bottom, 40)
-                    
-                    // Campos de entrada
-                    VStack(alignment: .leading, spacing: 15) {
-                        Text("Usuario")
-                            .font(.caption)
-                            .foregroundColor(.gray)
-                        
-                        TextField("Usuario", text: $viewModel.username)
-                            .textFieldStyle(CustomTextFieldStyle())
-                            .autocapitalization(.none)
-                        
-                        Text("Contraseña")
-                            .font(.caption)
-                            .foregroundColor(.gray)
-                        
-                        HStack {
-                            if isPasswordVisible {
-                                TextField("Contraseña", text: $viewModel.password)
-                                    .textFieldStyle(CustomTextFieldStyle())
-                                    .textContentType(.none)
-                                    .autocapitalization(.none)
-                            } else {
-                                SecureField("Contraseña", text: $viewModel.password)
-                                    .textFieldStyle(CustomTextFieldStyle())
-                                    .textContentType(.none)
-                                    .autocapitalization(.none)
-                            }
-                            
-                            Button(action: {
-                                isPasswordVisible.toggle()
-                            }) {
-                                Image(systemName: isPasswordVisible ? "eye.slash.fill" : "eye.fill")
-                                    .foregroundColor(.gray)
-                            }
-                        }
-                    }
-                    .padding(.horizontal, 20)
-                    
-                    // Mensaje de error
-                    if viewModel.showError {
-                        Text(viewModel.errorMessage)
-                            .foregroundColor(.red)
-                            .font(.system(size: 14))
-                            .transition(.opacity)
-                    }
-                    
-                    // Botón de inicio de sesión
-                    Button(action: {
-                        if viewModel.login() {
-                            navigateToTabView = true
-                        }
-                    }) {
-                        Text("Iniciar Sesión")
-                            .font(.system(size: 18, weight: .bold))
-                            .foregroundColor(.white)
-                            .frame(maxWidth: .infinity)
-                            .frame(height: 50)
-                            .background(Color(red: 0.9, green: 0.3, blue: 0.2))
-                            .cornerRadius(10)
-                    }
-                    .padding(.horizontal, 20)
-                    .padding(.top, 20)
-                    
-                    // Botones adicionales
-                    VStack(spacing: 15) {
-                        Button("¿Has olvidado tu contraseña?") {
-                            viewModel.resetPassword()
-                        }
-                        .foregroundColor(.gray)
-                        
-                        HStack {
-                            Text("¿No tienes cuenta?")
-                                .foregroundColor(.gray)
-                            Button("Regístrate") {
-                                navigateToRegister = true
-                            }
-                            .foregroundColor(Color(red: 0.9, green: 0.3, blue: 0.2))
-                            .fontWeight(.bold)
-                        }
-                    }
-                    .padding(.top, 20)
+            VStack(spacing: 20) {
+                // Logo
+                HStack {
+                    Text("Team")
+                        .font(.system(size: 40, weight: .bold)) +
+                    Text("UP")
+                        .font(.system(size: 40, weight: .bold))
+                        .foregroundColor(Color(red: 0.9, green: 0.3, blue: 0.2))
                 }
-                .padding()
+                .padding(.top, 60)
+                
+                // Campos de entrada
+                VStack(spacing: 15) {
+                    TextField("Email o nombre de usuario", text: $identifier)
+                        .textFieldStyle(RoundedBorderTextFieldStyle())
+                        .autocapitalization(.none)
+                        .autocorrectionDisabled()
+                        .keyboardType(.emailAddress)
+                    
+                    SecureField("Contraseña", text: $password)
+                        .textFieldStyle(RoundedBorderTextFieldStyle())
+                }
+                .padding(.horizontal, 32)
+                .padding(.top, 32)
+                
+                // Botón de olvidar contraseña
+                HStack {
+                    Spacer()
+                    Button(action: {
+                        showForgotPassword = true
+                    }) {
+                        Text("¿Has olvidado tu contraseña?")
+                            .font(.system(size: 14))
+                            .foregroundColor(Color(red: 0.9, green: 0.3, blue: 0.2))
+                    }
+                }
+                .padding(.horizontal, 32)
+                
+                // Botón de inicio de sesión
+                Button(action: {
+                    viewModel.login(identifier: identifier, password: password)
+                }) {
+                    Text("Iniciar sesión")
+                        .foregroundColor(.white)
+                        .frame(maxWidth: .infinity)
+                        .padding()
+                        .background(Color(red: 0.9, green: 0.3, blue: 0.2))
+                        .cornerRadius(10)
+                }
+                .padding(.horizontal, 32)
+                .padding(.top, 24)
+                
+                // Separador
+                HStack {
+                    VStack { Divider() }
+                    Text("O")
+                        .foregroundColor(.gray)
+                        .padding(.horizontal, 8)
+                    VStack { Divider() }
+                }
+                .padding(.horizontal, 32)
+                .padding(.vertical, 16)
+                
+                // Botón de registro
+                Button(action: {
+                    showRegister = true
+                }) {
+                    Text("Crear cuenta nueva")
+                        .foregroundColor(Color(red: 0.9, green: 0.3, blue: 0.2))
+                        .frame(maxWidth: .infinity)
+                        .padding()
+                        .overlay(
+                            RoundedRectangle(cornerRadius: 10)
+                                .stroke(Color(red: 0.9, green: 0.3, blue: 0.2), lineWidth: 1)
+                        )
+                }
+                .padding(.horizontal, 32)
+                
+                Spacer()
+                
+                // Mensaje de error
+                if !viewModel.errorMessage.isEmpty {
+                    Text(viewModel.errorMessage)
+                        .foregroundColor(.red)
+                        .font(.caption)
+                        .padding(.bottom, 16)
+                }
             }
-            .navigationDestination(isPresented: $navigateToTabView) {
+            .navigationDestination(isPresented: $viewModel.loginSuccess) {
                 MyTabView()
-                    .navigationBarBackButtonHidden(true)
             }
-            .navigationDestination(isPresented: $navigateToRegister) {
+            .navigationDestination(isPresented: $showRegister) {
                 RegisterView()
             }
+            .sheet(isPresented: $showForgotPassword) {
+                ForgotPasswordView()
+            }
         }
+        .navigationBarBackButtonHidden(true)
     }
 }
 

@@ -1,38 +1,40 @@
 import SwiftUI
+import Foundation
 
 class UserViewModel: ObservableObject {
     @Published var user: User
     @Published var isEditingProfile = false
     @Published var tempBio: String = ""
     @Published var selectedGames: [Game] = []
+    @Published var isLoggedIn: Bool = true
     
     init(user: User) {
         self.user = user
         self.tempBio = user.description
         
-        // Inicializar juegos y rangos desde el usuario
-        for (gameName, rank) in user.games {
-            if let gameIndex = Game.allGames.firstIndex(where: { $0.name == gameName }) {
+        // Convertir los juegos del usuario a objetos Game
+        self.selectedGames = user.games.compactMap { gameTuple in
+            if let gameIndex = Game.allGames.firstIndex(where: { $0.name == gameTuple.0 }) {
                 var game = Game.allGames[gameIndex]
-                game.selectedRank = rank
-                selectedGames.append(game)
+                game.selectedRank = gameTuple.1
+                return game
             }
+            return nil
         }
     }
     
     func updateProfile() {
         user.description = tempBio
         
-        // Actualizar juegos y rangos
-        var updatedGames: [(String, String)] = []
-        for game in selectedGames {
+        // Convertir los objetos Game a tuplas (String, String)
+        let updatedGames = selectedGames.compactMap { game -> (String, String)? in
             if let rank = game.selectedRank {
-                updatedGames.append((game.name, rank))
+                return (game.name, rank)
             }
+            return nil
         }
         user.games = updatedGames
         
-        // Aquí se guardarían los cambios en la base de datos
         isEditingProfile = false
     }
     
@@ -62,5 +64,44 @@ class UserViewModel: ObservableObject {
     
     func updateProfileImage(_ imageName: String) {
         user.profileImage = imageName
+    }
+    
+    func saveChanges(name: String, age: Int, gender: String) {
+        user.name = name
+        user.age = age
+        user.gender = gender
+        user.description = tempBio
+        
+        // Convertir los objetos Game a tuplas (String, String)
+        let updatedGames = selectedGames.compactMap { game -> (String, String)? in
+            if let rank = game.selectedRank {
+                return (game.name, rank)
+            }
+            return nil
+        }
+        user.games = updatedGames
+        
+        isEditingProfile = false
+    }
+    
+    func cancelEditing() {
+        tempBio = user.description
+        // Convertir los juegos del usuario a objetos Game
+        self.selectedGames = user.games.compactMap { gameTuple in
+            if let gameIndex = Game.allGames.firstIndex(where: { $0.name == gameTuple.0 }) {
+                var game = Game.allGames[gameIndex]
+                game.selectedRank = gameTuple.1
+                return game
+            }
+            return nil
+        }
+        isEditingProfile = false
+    }
+    
+    func logout() {
+        // Limpiar los datos del usuario
+        UserDefaults.standard.removeObject(forKey: "userToken")
+        UserDefaults.standard.removeObject(forKey: "userData")
+        isLoggedIn = false
     }
 } 

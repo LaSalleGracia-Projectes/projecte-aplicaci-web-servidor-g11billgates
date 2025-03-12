@@ -2,6 +2,8 @@ require('dotenv').config();
 const express = require('express');
 const { MongoClient, ObjectId } = require('mongodb');
 const cors = require('cors');
+const bcrypt = require('bcrypt');
+const jwt = require('jsonwebtoken');
 
 const app = express();
 const port = process.env.PORT || 3000;
@@ -226,51 +228,51 @@ async function buscarPosiblesMatches(database, idUsuario, idJuego) {
 // Login endpoint
 app.post('/login', async (req, res) => {
     try {
-        const { Correo, Contraseña } = req.body;
-        
-        const database = client.db(dbName);
-        const usuarios = database.collection('usuario');
-        
-        // Find user by email
-        const user = await usuarios.findOne({ Correo });
-        
+        const { Identificador, Contraseña } = req.body;
+
+        // Validar que se proporcionaron los campos requeridos
+        if (!Identificador || !Contraseña) {
+            return res.status(400).json({ error: 'Por favor, proporcione todos los campos requeridos' });
+        }
+
+        // Buscar usuario por email o nombre de usuario
+        const user = await User.findOne({
+            $or: [
+                { email: Identificador },
+                { username: Identificador }
+            ]
+        });
+
         if (!user) {
             return res.status(401).json({ error: 'Usuario no encontrado' });
         }
-        
-        // Verify password (in production, you should hash passwords)
-        if (user.Contraseña !== Contraseña) {
+
+        // Verificar la contraseña
+        const isValidPassword = await bcrypt.compare(Contraseña, user.password);
+        if (!isValidPassword) {
             return res.status(401).json({ error: 'Contraseña incorrecta' });
         }
-        
-        // Get user's games
-        const juegousuario = database.collection('juegousuario');
-        const userGames = await juegousuario.find({ IDUsuario: user.IDUsuario }).toArray();
-        
-        // Format user data for response
-        const userData = {
-            id: user.IDUsuario,
-            name: user.Nombre,
-            email: user.Correo,
-            age: user.Edad,
-            region: user.Region,
-            profileImage: user.FotoPerfil,
-            games: userGames.map(game => ({
-                gameId: game.IDJuego,
-                rank: game.NivelElo,
-                statistics: game.Estadisticas,
-                preferences: game.Preferencias
-            }))
-        };
-        
-        res.status(200).json({
-            message: 'Login successful',
-            user: userData
+
+        // Crear token JWT
+        const token = jwt.sign(
+            { userId: user._id },
+            process.env.JWT_SECRET || 'tu_secreto_jwt',
+            { expiresIn: '24h' }
+        );
+
+        // Enviar respuesta exitosa
+        res.json({
+            message: 'Login exitoso',
+            user: {
+                id: user._id,
+                email: user.email,
+                username: user.username
+            },
+            token
         });
-        
     } catch (error) {
-        console.error('Login error:', error);
-        res.status(500).json({ error: 'Error during login' });
+        console.error('Error en login:', error);
+        res.status(500).json({ error: 'Error en el servidor' });
     }
 });
 
@@ -292,19 +294,23 @@ app.post('/register', async (req, res) => {
         const lastUser = await usuarios.findOne({}, { sort: { IDUsuario: -1 } });
         const IDUsuario = lastUser ? (lastUser.IDUsuario || 0) + 1 : 1;
         
+        // Hash the password
+        const saltRounds = 10;
+        const hashedPassword = await bcrypt.hash(Contraseña, saltRounds);
+        
         // Create user document with required fields
         const userDocument = {
             IDUsuario: Number(IDUsuario),
             Nombre: String(Nombre || ''),
             Correo: String(Correo || ''),
-            Contraseña: String(Contraseña || ''),
+            Contraseña: hashedPassword,
             FotoPerfil: FotoPerfil ? String(FotoPerfil) : "default_profile",
             Edad: Edad ? Number(Edad) : null,
             Region: Region ? String(Region) : "Not specified"
         };
 
         // Validate required fields
-        if (!userDocument.Nombre || !userDocument.Correo || !userDocument.Contraseña) {
+        if (!userDocument.Nombre || !userDocument.Correo || !Contraseña) {
             return res.status(400).json({ 
                 error: 'Missing required fields',
                 required: ['Nombre', 'Correo', 'Contraseña']
@@ -409,6 +415,91 @@ app.get('/matches/:userId/:gameId', async (req, res) => {
     } catch (error) {
         console.error('Error finding matches:', error);
         res.status(500).json({ error: 'Error finding matches' });
+    }
+});
+
+// Change password endpoint
+app.post('/change-password', async (req, res) => {
+    try {
+        const { IDUsuario, NuevaContraseña } = req.body;
+        
+        const database = client.db(dbName);
+        const usuarios = database.collection('usuario');
+        
+        // Find user by ID
+        const user = await usuarios.findOne({ IDUsuario: Number(IDUsuario) });
+        
+        if (!user) {
+            return res.status(401).json({ error: 'Usuario no encontrado' });
+        }
+        
+        // Hash new password
+        const saltRounds = 10;
+        const hashedNewPassword = await bcrypt.hash(NuevaContraseña, saltRounds);
+        
+        // Update password in database
+        const result = await usuarios.updateOne(
+            { IDUsuario: Number(IDUsuario) },
+            { $set: { Contraseña: hashedNewPassword } }
+        );
+        
+        if (result.modifiedCount === 1) {
+            res.status(200).json({ message: 'Contraseña actualizada correctamente' });
+        } else {
+            throw new Error('Error al actualizar la contraseña');
+        }
+        
+    } catch (error) {
+        console.error('Change password error:', error);
+        res.status(500).json({ 
+            error: 'Error al cambiar la contraseña',
+            details: error.message
+        });
+    }
+});
+
+// Reset password endpoint
+app.post('/reset-password', async (req, res) => {
+    try {
+        const { Identificador, NuevaContraseña } = req.body;
+        
+        const database = client.db(dbName);
+        const usuarios = database.collection('usuario');
+        
+        // Buscar usuario por email o nombre
+        const user = await usuarios.findOne({
+            $or: [
+                { Correo: Identificador },
+                { Nombre: Identificador }
+            ]
+        });
+        
+        if (!user) {
+            return res.status(401).json({ error: 'Usuario no encontrado' });
+        }
+        
+        // Hash new password
+        const saltRounds = 10;
+        const hashedNewPassword = await bcrypt.hash(NuevaContraseña, saltRounds);
+        
+        // Update password in database
+        const result = await usuarios.updateOne(
+            { IDUsuario: user.IDUsuario },
+            { $set: { Contraseña: hashedNewPassword } }
+        );
+        
+        if (result.modifiedCount === 1) {
+            res.status(200).json({ message: 'Contraseña actualizada correctamente' });
+        } else {
+            throw new Error('Error al actualizar la contraseña');
+        }
+        
+    } catch (error) {
+        console.error('Reset password error:', error);
+        res.status(500).json({ 
+            error: 'Error al cambiar la contraseña',
+            details: error.message
+        });
     }
 });
 

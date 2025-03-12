@@ -8,6 +8,8 @@ struct MyUserView: View {
     @State private var tempAge: Int = 18
     @State private var tempGender: String = "Hombre"
     @State private var showImagePicker = false
+    @State private var navigateToLogin = false
+    @Environment(\.presentationMode) var presentationMode
     
     let genderOptions = ["Hombre", "Mujer", "Otro"]
     
@@ -303,6 +305,24 @@ struct MyUserView: View {
                         Spacer(minLength: 30)
                     }
                 }
+
+                // Botón de cerrar sesión
+                Button(action: {
+                    viewModel.logout()
+                    navigateToLogin = true
+                }) {
+                    HStack {
+                        Image(systemName: "rectangle.portrait.and.arrow.right")
+                        Text("Cerrar sesión")
+                    }
+                    .foregroundColor(.white)
+                    .frame(maxWidth: .infinity)
+                    .padding()
+                    .background(Color(red: 0.9, green: 0.3, blue: 0.2))
+                    .cornerRadius(10)
+                }
+                .padding(.horizontal)
+                .padding(.bottom, 20)
             }
             .background(Color(.systemGray6))
             .sheet(isPresented: $showSettings) {
@@ -317,6 +337,9 @@ struct MyUserView: View {
                 tempName = viewModel.user.name
                 tempAge = viewModel.user.age
                 tempGender = viewModel.user.gender
+            }
+            .navigationDestination(isPresented: $navigateToLogin) {
+                LoginView()
             }
         }
     }
