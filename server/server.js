@@ -236,11 +236,14 @@ app.post('/login', async (req, res) => {
             return res.status(400).json({ error: 'Por favor, proporcione todos los campos requeridos' });
         }
 
+        const database = client.db(dbName);
+        const usuarios = database.collection('usuario');
+
         // Buscar usuario por email o nombre de usuario
-        const user = await User.findOne({
+        const user = await usuarios.findOne({
             $or: [
-                { email: Identificador },
-                { username: Identificador }
+                { Correo: Identificador },
+                { Nombre: Identificador }
             ]
         });
 
@@ -249,14 +252,14 @@ app.post('/login', async (req, res) => {
         }
 
         // Verificar la contraseña
-        const isValidPassword = await bcrypt.compare(Contraseña, user.password);
+        const isValidPassword = await bcrypt.compare(Contraseña, user.Contraseña);
         if (!isValidPassword) {
             return res.status(401).json({ error: 'Contraseña incorrecta' });
         }
 
         // Crear token JWT
         const token = jwt.sign(
-            { userId: user._id },
+            { userId: user.IDUsuario },
             process.env.JWT_SECRET || 'tu_secreto_jwt',
             { expiresIn: '24h' }
         );
@@ -265,9 +268,9 @@ app.post('/login', async (req, res) => {
         res.json({
             message: 'Login exitoso',
             user: {
-                id: user._id,
-                email: user.email,
-                username: user.username
+                id: user.IDUsuario,
+                email: user.Correo,
+                username: user.Nombre
             },
             token
         });

@@ -8,8 +8,8 @@ struct MyUserView: View {
     @State private var tempAge: Int = 18
     @State private var tempGender: String = "Hombre"
     @State private var showImagePicker = false
-    @State private var navigateToLogin = false
     @Environment(\.presentationMode) var presentationMode
+    @EnvironmentObject var authManager: AuthenticationManager
     
     let genderOptions = ["Hombre", "Mujer", "Otro"]
     
@@ -309,7 +309,7 @@ struct MyUserView: View {
                 // Botón de cerrar sesión
                 Button(action: {
                     viewModel.logout()
-                    navigateToLogin = true
+                    authManager.isAuthenticated = false
                 }) {
                     HStack {
                         Image(systemName: "rectangle.portrait.and.arrow.right")
@@ -337,9 +337,6 @@ struct MyUserView: View {
                 tempName = viewModel.user.name
                 tempAge = viewModel.user.age
                 tempGender = viewModel.user.gender
-            }
-            .navigationDestination(isPresented: $navigateToLogin) {
-                LoginView()
             }
         }
     }
