@@ -4,6 +4,7 @@ const { MongoClient, ObjectId } = require('mongodb');
 const cors = require('cors');
 const bcrypt = require('bcrypt');
 const jwt = require('jsonwebtoken');
+const crypto = require('crypto');
 
 const app = express();
 const port = process.env.PORT || 3000;
@@ -498,6 +499,51 @@ app.post('/reset-password', async (req, res) => {
         console.error('Reset password error:', error);
         res.status(500).json({ 
             error: 'Error al cambiar la contraseña',
+            details: error.message
+        });
+    }
+});
+
+// Forgot password endpoint
+app.post('/forgot-password', async (req, res) => {
+    try {
+        const { email } = req.body;
+        
+        const database = client.db(dbName);
+        const usuarios = database.collection('usuario');
+        
+        // Buscar usuario por email
+        const user = await usuarios.findOne({ Correo: email });
+        
+        if (!user) {
+            return res.status(404).json({ error: 'No se encontró ningún usuario con ese email' });
+        }
+        
+        // Generar token de recuperación
+        const resetToken = crypto.randomBytes(32).toString('hex');
+        const resetTokenExpiry = new Date(Date.now() + 3600000); // 1 hora
+        
+        // Guardar token en la base de datos
+        await usuarios.updateOne(
+            { IDUsuario: user.IDUsuario },
+            { 
+                $set: { 
+                    resetToken,
+                    resetTokenExpiry
+                }
+            }
+        );
+        
+        // Aquí iría la lógica para enviar el email con el token
+        // Por ahora solo enviamos una respuesta de éxito
+        res.status(200).json({ 
+            message: 'Se han enviado las instrucciones de recuperación a tu email'
+        });
+        
+    } catch (error) {
+        console.error('Forgot password error:', error);
+        res.status(500).json({ 
+            error: 'Error al procesar la solicitud de recuperación de contraseña',
             details: error.message
         });
     }
