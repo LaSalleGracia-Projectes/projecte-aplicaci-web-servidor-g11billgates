@@ -95,7 +95,8 @@ async function configurarValidacion(database) {
             Contraseña: { bsonType: "string" },
             FotoPerfil: { bsonType: ["string", "null"] },
             Edad: { bsonType: ["int", "number", "null"] },
-            Region: { bsonType: ["string", "null"] }
+            Region: { bsonType: ["string", "null"] },
+            bloqueado: { bsonType: "bool" }
           }
         }
       },
@@ -230,16 +231,11 @@ async function buscarPosiblesMatches(database, idUsuario, idJuego) {
 app.post('/login', async (req, res) => {
     try {
         const { Identificador, Contraseña } = req.body;
-
-        // Validar que se proporcionaron los campos requeridos
-        if (!Identificador || !Contraseña) {
-            return res.status(400).json({ error: 'Por favor, proporcione todos los campos requeridos' });
-        }
-
+        
         const database = client.db(dbName);
         const usuarios = database.collection('usuario');
-
-        // Buscar usuario por email o nombre de usuario
+        
+        // Buscar usuario por email o nombre
         const user = await usuarios.findOne({
             $or: [
                 { Correo: Identificador },
@@ -249,6 +245,11 @@ app.post('/login', async (req, res) => {
 
         if (!user) {
             return res.status(401).json({ error: 'Usuario no encontrado' });
+        }
+
+        // Verificar si el usuario está bloqueado
+        if (user.bloqueado) {
+            return res.status(403).json({ error: 'Tu cuenta ha sido bloqueada. Por favor, contacta con el administrador.' });
         }
 
         // Verificar la contraseña
@@ -549,6 +550,68 @@ app.post('/forgot-password', async (req, res) => {
             error: 'Error al procesar la solicitud de recuperación de contraseña',
             details: error.message
         });
+    }
+});
+
+// Block user endpoint
+app.post('/block-user', async (req, res) => {
+    try {
+        const { IDUsuario, IDUsuarioBloqueador } = req.body;
+        
+        const database = client.db(dbName);
+        const usuarios = database.collection('usuario');
+        
+        // Verificar que el usuario que bloquea existe
+        const bloqueador = await usuarios.findOne({ IDUsuario: Number(IDUsuarioBloqueador) });
+        if (!bloqueador) {
+            return res.status(404).json({ error: 'Usuario bloqueador no encontrado' });
+        }
+
+        // Actualizar el estado de bloqueo del usuario
+        const result = await usuarios.updateOne(
+            { IDUsuario: Number(IDUsuario) },
+            { $set: { bloqueado: true } }
+        );
+
+        if (result.matchedCount === 0) {
+            return res.status(404).json({ error: 'Usuario a bloquear no encontrado' });
+        }
+
+        res.json({ message: 'Usuario bloqueado exitosamente' });
+    } catch (error) {
+        console.error('Error al bloquear usuario:', error);
+        res.status(500).json({ error: 'Error en el servidor' });
+    }
+});
+
+// Unblock user endpoint
+app.post('/unblock-user', async (req, res) => {
+    try {
+        const { IDUsuario, IDUsuarioDesbloqueador } = req.body;
+        
+        const database = client.db(dbName);
+        const usuarios = database.collection('usuario');
+        
+        // Verificar que el usuario que desbloquea existe
+        const desbloqueador = await usuarios.findOne({ IDUsuario: Number(IDUsuarioDesbloqueador) });
+        if (!desbloqueador) {
+            return res.status(404).json({ error: 'Usuario desbloqueador no encontrado' });
+        }
+
+        // Actualizar el estado de bloqueo del usuario
+        const result = await usuarios.updateOne(
+            { IDUsuario: Number(IDUsuario) },
+            { $set: { bloqueado: false } }
+        );
+
+        if (result.matchedCount === 0) {
+            return res.status(404).json({ error: 'Usuario a desbloquear no encontrado' });
+        }
+
+        res.json({ message: 'Usuario desbloqueado exitosamente' });
+    } catch (error) {
+        console.error('Error al desbloquear usuario:', error);
+        res.status(500).json({ error: 'Error en el servidor' });
     }
 });
 
