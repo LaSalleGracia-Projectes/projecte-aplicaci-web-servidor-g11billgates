@@ -27,7 +27,8 @@ async function crearColecciones(database) {
     "matchusers", 
     "actividad", 
     "juego",
-    "juegousuario"
+    "juegousuario",
+    "archivos_multimedia"
   ];
   
   for (const col of colecciones) {
@@ -55,6 +56,12 @@ async function crearIndices(database) {
   await database.collection("mensaje").createIndex({ IDChat: 1 });
   await database.collection("mensaje").createIndex({ IDUsuario: 1 });
   await database.collection("mensaje").createIndex({ FechaEnvio: 1 });
+  await database.collection("mensaje").createIndex({ IDArchivo: 1 });
+  
+  await database.collection("archivos_multimedia").createIndex({ IDArchivo: 1 }, { unique: true });
+  await database.collection("archivos_multimedia").createIndex({ IDMensaje: 1 });
+  await database.collection("archivos_multimedia").createIndex({ Tipo: 1 });
+  await database.collection("archivos_multimedia").createIndex({ FechaSubida: 1 });
   
   await database.collection("chat").createIndex({ IDChat: 1 }, { unique: true });
   await database.collection("chat").createIndex({ IDMatch: 1 });
@@ -82,6 +89,61 @@ async function configurarValidacion(database) {
   console.log('Configurando validadores de esquema...');
   
   try {
+    // Validador para la colección de mensajes
+    await database.command({
+      collMod: "mensaje",
+      validator: {
+        $jsonSchema: {
+          bsonType: "object",
+          required: ["IDMensaje", "IDChat", "IDUsuario", "Tipo", "FechaEnvio"],
+          properties: {
+            IDMensaje: { bsonType: ["int", "number"] },
+            IDChat: { bsonType: ["int", "number"] },
+            IDUsuario: { bsonType: ["int", "number"] },
+            Tipo: { 
+              bsonType: "string",
+              enum: ["texto", "imagen", "video", "audio"]
+            },
+            Contenido: { bsonType: "string" },
+            FechaEnvio: { bsonType: "date" },
+            IDArchivo: { bsonType: ["int", "number", "null"] }
+          }
+        }
+      },
+      validationLevel: "moderate",
+      validationAction: "error"
+    });
+    console.log('Validador de mensaje configurado con éxito');
+
+    // Validador para la colección de archivos multimedia
+    await database.command({
+      collMod: "archivos_multimedia",
+      validator: {
+        $jsonSchema: {
+          bsonType: "object",
+          required: ["IDArchivo", "IDMensaje", "Tipo", "URL", "FechaSubida"],
+          properties: {
+            IDArchivo: { bsonType: ["int", "number"] },
+            IDMensaje: { bsonType: ["int", "number"] },
+            Tipo: { 
+              bsonType: "string",
+              enum: ["imagen", "video", "audio"]
+            },
+            URL: { bsonType: "string" },
+            NombreArchivo: { bsonType: "string" },
+            Tamaño: { bsonType: ["int", "number"] },
+            Formato: { bsonType: "string" },
+            FechaSubida: { bsonType: "date" },
+            Duracion: { bsonType: ["int", "number", "null"] } // Para videos y audio
+          }
+        }
+      },
+      validationLevel: "moderate",
+      validationAction: "error"
+    });
+    console.log('Validador de archivos multimedia configurado con éxito');
+
+    // Validador existente para usuario
     await database.command({
       collMod: "usuario",
       validator: {
@@ -105,7 +167,7 @@ async function configurarValidacion(database) {
     });
     console.log('Validador de usuario configurado con éxito');
   } catch (error) {
-    console.error('Error configurando validador:', error);
+    console.error('Error configurando validadores:', error);
   }
 }
 
