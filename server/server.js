@@ -5,15 +5,84 @@ const cors = require('cors');
 const bcrypt = require('bcrypt');
 const jwt = require('jsonwebtoken');
 const crypto = require('crypto');
+const multer = require('multer');
+const path = require('path');
+const fs = require('fs');
+const sharp = require('sharp');
+const ffmpeg = require('fluent-ffmpeg');
+const ffmpegInstaller = require('@ffmpeg-installer/ffmpeg');
+
+ffmpeg.setFfmpegPath(ffmpegInstaller.path);
 
 const app = express();
 const port = process.env.PORT || 3000;
 const uri = process.env.MONGODB_URI || "mongodb+srv://rogerjove2005:rogjov01@cluster0.rxxyf.mongodb.net/";
 const dbName = process.env.DB_NAME || "Projecte_prova";
 
+// Configuración de directorios para archivos
+const uploadDir = path.join(__dirname, 'uploads');
+const profileImagesDir = path.join(uploadDir, 'profiles');
+const chatMediaDir = path.join(uploadDir, 'chat');
+
+// Crear directorios si no existen
+[uploadDir, profileImagesDir, chatMediaDir].forEach(dir => {
+    if (!fs.existsSync(dir)) {
+        fs.mkdirSync(dir, { recursive: true });
+    }
+});
+
+// Configuración de multer para subida de archivos
+const storage = multer.diskStorage({
+    destination: function (req, file, cb) {
+        let uploadPath = uploadDir;
+        if (file.fieldname === 'profileImage') {
+            uploadPath = profileImagesDir;
+        } else if (file.fieldname === 'chatMedia') {
+            uploadPath = chatMediaDir;
+        }
+        cb(null, uploadPath);
+    },
+    filename: function (req, file, cb) {
+        const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1E9);
+        cb(null, file.fieldname + '-' + uniqueSuffix + path.extname(file.originalname));
+    }
+});
+
+const fileFilter = (req, file, cb) => {
+    if (file.fieldname === 'profileImage') {
+        // Solo permitir imágenes para foto de perfil
+        if (file.mimetype.startsWith('image/')) {
+            cb(null, true);
+        } else {
+            cb(new Error('Solo se permiten imágenes para la foto de perfil'), false);
+        }
+    } else if (file.fieldname === 'chatMedia') {
+        // Permitir imágenes, videos y audios para el chat
+        if (file.mimetype.startsWith('image/') || 
+            file.mimetype.startsWith('video/') || 
+            file.mimetype.startsWith('audio/')) {
+            cb(null, true);
+        } else {
+            cb(new Error('Tipo de archivo no permitido'), false);
+        }
+    } else {
+        cb(new Error('Campo de archivo no reconocido'), false);
+    }
+};
+
+const upload = multer({
+    storage: storage,
+    fileFilter: fileFilter,
+    limits: {
+        fileSize: 10 * 1024 * 1024, // 10MB para imágenes y audios
+        files: 1
+    }
+});
+
 // Middleware
 app.use(cors());
 app.use(express.json());
+app.use('/uploads', express.static(uploadDir));
 
 // MongoDB client
 const client = new MongoClient(uri);
@@ -674,6 +743,115 @@ app.post('/unblock-user', async (req, res) => {
     } catch (error) {
         console.error('Error al desbloquear usuario:', error);
         res.status(500).json({ error: 'Error en el servidor' });
+    }
+});
+
+// Endpoint para subir foto de perfil
+app.post('/upload-profile-image', upload.single('profileImage'), async (req, res) => {
+    try {
+        if (!req.file) {
+            return res.status(400).json({ error: 'No se ha subido ningún archivo' });
+        }
+
+        const { IDUsuario } = req.body;
+        const database = client.db(dbName);
+        const usuarios = database.collection('usuario');
+
+        // Procesar la imagen con sharp (redimensionar y optimizar)
+        const processedImagePath = path.join(profileImagesDir, 'processed-' + req.file.filename);
+        await sharp(req.file.path)
+            .resize(200, 200, { fit: 'cover' })
+            .jpeg({ quality: 80 })
+            .toFile(processedImagePath);
+
+        // Eliminar la imagen original
+        fs.unlinkSync(req.file.path);
+
+        // Actualizar la URL de la foto de perfil en la base de datos
+        const imageUrl = `/uploads/profiles/processed-${req.file.filename}`;
+        await usuarios.updateOne(
+            { IDUsuario: Number(IDUsuario) },
+            { $set: { FotoPerfil: imageUrl } }
+        );
+
+        res.json({
+            message: 'Foto de perfil actualizada exitosamente',
+            imageUrl: imageUrl
+        });
+    } catch (error) {
+        console.error('Error al subir foto de perfil:', error);
+        res.status(500).json({ error: 'Error al procesar la imagen' });
+    }
+});
+
+// Endpoint para subir archivos multimedia al chat
+app.post('/upload-chat-media', upload.single('chatMedia'), async (req, res) => {
+    try {
+        if (!req.file) {
+            return res.status(400).json({ error: 'No se ha subido ningún archivo' });
+        }
+
+        const { IDMensaje, IDUsuario } = req.body;
+        const database = client.db(dbName);
+        const archivosMultimedia = database.collection('archivos_multimedia');
+        const mensajes = database.collection('mensaje');
+
+        // Determinar el tipo de archivo
+        const fileType = req.file.mimetype.split('/')[0];
+        let processedFilePath = req.file.path;
+        let duracion = null;
+
+        // Procesar el archivo según su tipo
+        if (fileType === 'image') {
+            // Procesar imagen con sharp
+            processedFilePath = path.join(chatMediaDir, 'processed-' + req.file.filename);
+            await sharp(req.file.path)
+                .resize(800, 800, { fit: 'inside' })
+                .jpeg({ quality: 80 })
+                .toFile(processedFilePath);
+            fs.unlinkSync(req.file.path);
+        } else if (fileType === 'video') {
+            // Obtener duración del video
+            duracion = await new Promise((resolve, reject) => {
+                ffmpeg.ffprobe(req.file.path, (err, metadata) => {
+                    if (err) reject(err);
+                    resolve(metadata.format.duration);
+                });
+            });
+        }
+
+        // Generar ID único para el archivo
+        const lastFile = await archivosMultimedia.findOne({}, { sort: { IDArchivo: -1 } });
+        const IDArchivo = lastFile ? (lastFile.IDArchivo || 0) + 1 : 1;
+
+        // Crear registro en la base de datos
+        const archivoData = {
+            IDArchivo: Number(IDArchivo),
+            IDMensaje: Number(IDMensaje),
+            Tipo: fileType,
+            URL: `/uploads/chat/${path.basename(processedFilePath)}`,
+            NombreArchivo: req.file.originalname,
+            Tamaño: req.file.size,
+            Formato: req.file.mimetype,
+            FechaSubida: new Date(),
+            Duracion: duracion
+        };
+
+        await archivosMultimedia.insertOne(archivoData);
+
+        // Actualizar el mensaje con el ID del archivo
+        await mensajes.updateOne(
+            { IDMensaje: Number(IDMensaje) },
+            { $set: { IDArchivo: Number(IDArchivo) } }
+        );
+
+        res.json({
+            message: 'Archivo multimedia subido exitosamente',
+            archivo: archivoData
+        });
+    } catch (error) {
+        console.error('Error al subir archivo multimedia:', error);
+        res.status(500).json({ error: 'Error al procesar el archivo' });
     }
 });
 
