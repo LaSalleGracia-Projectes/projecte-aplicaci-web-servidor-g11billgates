@@ -91,7 +91,47 @@ class MediaService {
         return mediaURL
     }
     
-    func getVideoDuration(from url: URL) async throws -> Double {
+    func uploadVoiceMessage(_ audioURL: URL, forChat chatId: String) async throws -> String {
+        let boundary = UUID().uuidString
+        var request = URLRequest(url: URL(string: "\(baseURL)/upload-chat-media")!)
+        request.httpMethod = "POST"
+        request.setValue("multipart/form-data; boundary=\(boundary)", forHTTPHeaderField: "Content-Type")
+        
+        var bodyData = Data()
+        
+        // Añadir ID del chat
+        bodyData.append("--\(boundary)\r\n".data(using: .utf8)!)
+        bodyData.append("Content-Disposition: form-data; name=\"IDChat\"\r\n\r\n".data(using: .utf8)!)
+        bodyData.append("\(chatId)\r\n".data(using: .utf8)!)
+        
+        // Añadir datos del mensaje de voz
+        let audioData = try Data(contentsOf: audioURL)
+        bodyData.append("--\(boundary)\r\n".data(using: .utf8)!)
+        bodyData.append("Content-Disposition: form-data; name=\"chatMedia\"; filename=\"voice.m4a\"\r\n".data(using: .utf8)!)
+        bodyData.append("Content-Type: audio/m4a\r\n\r\n".data(using: .utf8)!)
+        bodyData.append(audioData)
+        bodyData.append("\r\n".data(using: .utf8)!)
+        
+        bodyData.append("--\(boundary)--\r\n".data(using: .utf8)!)
+        request.httpBody = bodyData
+        
+        let (data, response) = try await URLSession.shared.data(for: request)
+        
+        guard let httpResponse = response as? HTTPURLResponse,
+              (200...299).contains(httpResponse.statusCode) else {
+            throw MediaError.uploadFailed
+        }
+        
+        let responseDict = try JSONSerialization.jsonObject(with: data) as? [String: [String: Any]]
+        guard let archivo = responseDict?["archivo"] as? [String: Any],
+              let mediaURL = archivo["URL"] as? String else {
+            throw MediaError.invalidResponse
+        }
+        
+        return mediaURL
+    }
+    
+    func getMediaDuration(from url: URL) async throws -> Double {
         let asset = AVURLAsset(url: url)
         let duration = try await asset.load(.duration)
         return duration.seconds

@@ -11,6 +11,7 @@ enum MessageType {
     case text
     case image
     case video
+    case voice
 }
 
 struct Message: Identifiable {
@@ -20,7 +21,7 @@ struct Message: Identifiable {
     var mediaURL: String?
     var isFromCurrentUser: Bool
     var timestamp: String
-    var duration: Double? // Para videos
+    var duration: Double? // Para videos y mensajes de voz
     
     init(content: String, type: MessageType = .text, mediaURL: String? = nil, isFromCurrentUser: Bool, timestamp: String, duration: Double? = nil) {
         self.content = content
