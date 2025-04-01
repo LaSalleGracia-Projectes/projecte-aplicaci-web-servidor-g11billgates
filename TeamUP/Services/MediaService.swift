@@ -6,10 +6,47 @@ class MediaService {
     static let shared = MediaService()
     private let baseURL = "http://localhost:3000" // Asegúrate de que esta URL coincida con tu servidor
     
+    // Límites de tamaño en bytes
+    private let maxImageSize: Int64 = 10 * 1024 * 1024 // 10MB
+    private let maxVideoSize: Int64 = 50 * 1024 * 1024 // 50MB
+    private let maxAudioSize: Int64 = 10 * 1024 * 1024 // 10MB
+    
     private init() {}
     
+    // MARK: - Validation
+    
+    private func validateFileSize(at url: URL, maxSize: Int64) throws {
+        let attributes = try FileManager.default.attributesOfItem(atPath: url.path)
+        let fileSize = attributes[.size] as? Int64 ?? 0
+        
+        if fileSize > maxSize {
+            throw MediaError.fileTooLarge
+        }
+    }
+    
+    private func validateImage(_ image: UIImage) throws {
+        let imageSize = image.jpegData(compressionQuality: 1.0)?.count ?? 0
+        if imageSize > maxImageSize {
+            throw MediaError.fileTooLarge
+        }
+    }
+    
+    // MARK: - Public Methods
+    
     func uploadImage(_ image: UIImage, forChat chatId: String) async throws -> String {
-        guard let imageData = image.jpegData(compressionQuality: 0.7) else {
+        try validateImage(image)
+        
+        // Ajustar calidad de compresión según el tamaño
+        var compressionQuality: CGFloat = 0.7
+        var imageData = image.jpegData(compressionQuality: compressionQuality)
+        
+        // Reducir calidad si el archivo sigue siendo muy grande
+        while let data = imageData, data.count > maxImageSize && compressionQuality > 0.1 {
+            compressionQuality -= 0.1
+            imageData = image.jpegData(compressionQuality: compressionQuality)
+        }
+        
+        guard let finalImageData = imageData else {
             throw MediaError.invalidImageData
         }
         
@@ -29,7 +66,7 @@ class MediaService {
         bodyData.append("--\(boundary)\r\n".data(using: .utf8)!)
         bodyData.append("Content-Disposition: form-data; name=\"chatMedia\"; filename=\"image.jpg\"\r\n".data(using: .utf8)!)
         bodyData.append("Content-Type: image/jpeg\r\n\r\n".data(using: .utf8)!)
-        bodyData.append(imageData)
+        bodyData.append(finalImageData)
         bodyData.append("\r\n".data(using: .utf8)!)
         
         bodyData.append("--\(boundary)--\r\n".data(using: .utf8)!)
@@ -52,6 +89,8 @@ class MediaService {
     }
     
     func uploadVideo(_ videoURL: URL, forChat chatId: String) async throws -> String {
+        try validateFileSize(at: videoURL, maxSize: maxVideoSize)
+        
         let boundary = UUID().uuidString
         var request = URLRequest(url: URL(string: "\(baseURL)/upload-chat-media")!)
         request.httpMethod = "POST"
@@ -92,6 +131,8 @@ class MediaService {
     }
     
     func uploadVoiceMessage(_ audioURL: URL, forChat chatId: String) async throws -> String {
+        try validateFileSize(at: audioURL, maxSize: maxAudioSize)
+        
         let boundary = UUID().uuidString
         var request = URLRequest(url: URL(string: "\(baseURL)/upload-chat-media")!)
         request.httpMethod = "POST"
@@ -142,6 +183,7 @@ enum MediaError: Error {
     case invalidImageData
     case uploadFailed
     case invalidResponse
+    case fileTooLarge
     
     var localizedDescription: String {
         switch self {
@@ -151,6 +193,8 @@ enum MediaError: Error {
             return "Error al subir el archivo"
         case .invalidResponse:
             return "Respuesta inválida del servidor"
+        case .fileTooLarge:
+            return "El archivo es demasiado grande"
         }
     }
 } 
