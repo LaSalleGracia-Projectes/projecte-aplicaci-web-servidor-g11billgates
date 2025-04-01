@@ -2,6 +2,7 @@ import Foundation
 import UIKit
 import AVFoundation
 import UniformTypeIdentifiers
+import Vision
 
 class MediaService {
     static let shared = MediaService()
@@ -17,6 +18,9 @@ class MediaService {
     private let allowedVideoTypes = ["public.movie", "public.video"]
     private let allowedAudioTypes = ["public.audio"]
     
+    // Umbral de confianza para contenido inapropiado
+    private let inappropriateContentThreshold: Float = 0.7
+    
     private init() {}
     
     // MARK: - Validation
@@ -30,11 +34,14 @@ class MediaService {
         }
     }
     
-    private func validateImage(_ image: UIImage) throws {
+    private func validateImage(_ image: UIImage, userId: String) async throws {
         let imageSize = image.jpegData(compressionQuality: 1.0)?.count ?? 0
         if imageSize > maxImageSize {
             throw MediaError.fileTooLarge
         }
+        
+        // Verificar contenido inapropiado
+        try await checkInappropriateContent(image, userId: userId)
     }
     
     private func validateFileType(at url: URL, allowedTypes: [String]) throws {
@@ -52,10 +59,45 @@ class MediaService {
         }
     }
     
+    // MARK: - Content Analysis
+    
+    private func checkInappropriateContent(_ image: UIImage, userId: String) async throws {
+        guard let cgImage = image.cgImage else {
+            throw MediaError.invalidImageData
+        }
+        
+        let request = VNClassifyImageRequest()
+        let handler = VNImageRequestHandler(cgImage: cgImage, options: [:])
+        
+        try handler.perform([request])
+        
+        guard let observations = request.results as? [VNClassificationObservation] else {
+            return
+        }
+        
+        // Palabras clave que indican contenido inapropiado
+        let inappropriateKeywords = ["adult", "nude", "naked", "porn", "explicit", "adult content"]
+        
+        for observation in observations {
+            let label = observation.identifier.lowercased()
+            if inappropriateKeywords.contains(where: { label.contains($0) }) && 
+               observation.confidence > inappropriateContentThreshold {
+                // Crear reporte de contenido inapropiado
+                let description = "Intento de subir contenido inapropiado. Etiqueta detectada: \(label) con confianza: \(observation.confidence)"
+                try await ReportService.shared.createReport(
+                    userId: userId,
+                    type: .inappropriateContent,
+                    description: description
+                )
+                throw MediaError.inappropriateContent
+            }
+        }
+    }
+    
     // MARK: - Public Methods
     
-    func uploadImage(_ image: UIImage, forChat chatId: String) async throws -> String {
-        try validateImage(image)
+    func uploadImage(_ image: UIImage, forChat chatId: String, userId: String) async throws -> String {
+        try await validateImage(image, userId: userId)
         
         // Ajustar calidad de compresión según el tamaño
         var compressionQuality: CGFloat = 0.7
@@ -208,6 +250,7 @@ enum MediaError: Error {
     case invalidResponse
     case fileTooLarge
     case invalidFileType
+    case inappropriateContent
     
     var localizedDescription: String {
         switch self {
@@ -221,6 +264,8 @@ enum MediaError: Error {
             return "El archivo es demasiado grande"
         case .invalidFileType:
             return "Tipo de archivo no permitido"
+        case .inappropriateContent:
+            return "El contenido de la imagen no es apropiado y ha sido reportado"
         }
     }
 } 
