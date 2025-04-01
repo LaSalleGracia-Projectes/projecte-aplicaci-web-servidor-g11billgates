@@ -1,14 +1,15 @@
 import SwiftUI
 import UIKit
 
-struct ImagePicker: UIViewControllerRepresentable {
-    @Binding var image: UIImage?
+struct VideoPicker: UIViewControllerRepresentable {
+    @Binding var videoURL: URL?
     @Environment(\.presentationMode) var presentationMode
     
     func makeUIViewController(context: Context) -> UIImagePickerController {
         let picker = UIImagePickerController()
         picker.delegate = context.coordinator
         picker.sourceType = .photoLibrary
+        picker.mediaTypes = ["public.movie"]
         return picker
     }
     
@@ -19,15 +20,15 @@ struct ImagePicker: UIViewControllerRepresentable {
     }
     
     class Coordinator: NSObject, UIImagePickerControllerDelegate, UINavigationControllerDelegate {
-        let parent: ImagePicker
+        let parent: VideoPicker
         
-        init(_ parent: ImagePicker) {
+        init(_ parent: VideoPicker) {
             self.parent = parent
         }
         
         func imagePickerController(_ picker: UIImagePickerController, didFinishPickingMediaWithInfo info: [UIImagePickerController.InfoKey : Any]) {
-            if let image = info[.originalImage] as? UIImage {
-                parent.image = image
+            if let videoURL = info[.mediaURL] as? URL {
+                parent.videoURL = videoURL
             }
             parent.presentationMode.wrappedValue.dismiss()
         }

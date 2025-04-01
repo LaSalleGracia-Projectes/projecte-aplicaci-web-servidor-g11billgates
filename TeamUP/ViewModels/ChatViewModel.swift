@@ -17,13 +17,18 @@ class ChatViewModel: NSObject, ObservableObject {
     @Published var audioRecorder: AVAudioRecorder?
     @Published var audioURL: URL?
     @Published var audioPlayer: AVAudioPlayer?
+    @Published var showAgeRestrictionAlert = false
     
     private let mediaService = MediaService.shared
     private let chatId: String
+    private let userId: String
+    private let userAge: Int
     private var recordingTimer: Timer?
     
-    init(chatId: String) {
+    init(chatId: String, userId: String, userAge: Int) {
         self.chatId = chatId
+        self.userId = userId
+        self.userAge = userAge
         super.init()
         loadMessages()
         setupAudioSession()
@@ -48,8 +53,17 @@ class ChatViewModel: NSObject, ObservableObject {
         ]
     }
     
-    func sendMessage() {
-        guard !messageText.isEmpty else { return }
+    private func checkAgeRestriction() -> Bool {
+        return userAge >= 18
+    }
+    
+    func sendMessage() async {
+        guard !messageText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return }
+        
+        if !checkAgeRestriction() {
+            showAgeRestrictionAlert = true
+            return
+        }
         
         let newMessage = Message(
             content: messageText,
@@ -58,14 +72,71 @@ class ChatViewModel: NSObject, ObservableObject {
             timestamp: formatTimestamp()
         )
         
-        messages.append(newMessage)
-        messageText = ""
+        await MainActor.run {
+            messages.append(newMessage)
+            messageText = ""
+        }
         
         // TODO: Implementar envío al servidor
     }
     
+    func sendImage(_ image: UIImage) async {
+        if !checkAgeRestriction() {
+            showAgeRestrictionAlert = true
+            return
+        }
+        
+        do {
+            let mediaURL = try await mediaService.uploadImage(image, forChat: chatId, userId: userId)
+            let message = Message(
+                content: "Imagen",
+                type: .image,
+                mediaURL: mediaURL,
+                isFromCurrentUser: true,
+                timestamp: formatTimestamp()
+            )
+            
+            await MainActor.run {
+                messages.append(message)
+            }
+        } catch {
+            print("Error al subir la imagen: \(error)")
+        }
+    }
+    
+    func sendVideo(_ videoURL: URL) async {
+        if !checkAgeRestriction() {
+            showAgeRestrictionAlert = true
+            return
+        }
+        
+        do {
+            let mediaURL = try await mediaService.uploadVideo(videoURL, forChat: chatId)
+            let duration = try await mediaService.getMediaDuration(from: videoURL)
+            let message = Message(
+                content: "Video",
+                type: .video,
+                mediaURL: mediaURL,
+                isFromCurrentUser: true,
+                timestamp: formatTimestamp(),
+                duration: duration
+            )
+            
+            await MainActor.run {
+                messages.append(message)
+            }
+        } catch {
+            print("Error al subir el video: \(error)")
+        }
+    }
+    
     func startRecording() {
-        let audioFilename = getDocumentsDirectory().appendingPathComponent("\(UUID().uuidString).m4a")
+        if !checkAgeRestriction() {
+            showAgeRestrictionAlert = true
+            return
+        }
+        
+        let audioFilename = getDocumentsDirectory().appendingPathComponent("\(Date().timeIntervalSince1970).m4a")
         
         let settings = [
             AVFormatIDKey: Int(kAudioFormatMPEG4AAC),

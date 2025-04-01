@@ -15,6 +15,7 @@ enum AuthError: LocalizedError {
     case registrationFailed(Error)
     case loginFailed(Error)
     case databaseError(Error)
+    case underageUser
     
     var errorDescription: String? {
         switch self {
@@ -46,6 +47,8 @@ enum AuthError: LocalizedError {
             return "Error en el inicio de sesión: \(error.localizedDescription)"
         case .databaseError(let error):
             return "Error de base de datos: \(error.localizedDescription)"
+        case .underageUser:
+            return "Debes ser mayor de 18 años para acceder al chat"
         }
     }
 }

@@ -50,6 +50,7 @@ struct MatchView: View {
                             object: nil,
                             userInfo: [
                                 "chat": ChatPreview(
+                                    id: UUID().uuidString,
                                     username: matchedUser.name,
                                     lastMessage: "¡Hola! ¡Hemos hecho match!",
                                     timestamp: "Ahora",

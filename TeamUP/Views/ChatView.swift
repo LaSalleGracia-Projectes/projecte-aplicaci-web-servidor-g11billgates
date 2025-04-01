@@ -1,4 +1,5 @@
 import SwiftUI
+import AVKit
 
 // MARK: - Models
 struct ChatMessage: Identifiable {
@@ -10,103 +11,210 @@ struct ChatMessage: Identifiable {
 
 // MARK: - Views
 struct ChatView: View {
-    let user: User
-    @State private var messageText = ""
-    @State private var selectedUser: User?
+    @StateObject private var viewModel: ChatViewModel
+    @Environment(\.presentationMode) var presentationMode
+    @State private var showImagePicker = false
+    @State private var showVideoPicker = false
     
-    // Mensajes de ejemplo
-    private let sampleMessages = [
-        ChatMessage(content: "¡Hola! ¿Jugamos una partida?", timestamp: "14:30", isFromCurrentUser: true),
-        ChatMessage(content: "¡Claro! Dame 5 minutos", timestamp: "14:31", isFromCurrentUser: false)
-    ]
+    init(chatId: String, userId: String, userAge: Int) {
+        _viewModel = StateObject(wrappedValue: ChatViewModel(chatId: chatId, userId: userId, userAge: userAge))
+    }
     
     var body: some View {
-        VStack(spacing: 0) {
-            // Header personalizado
-            HStack(spacing: 16) {
-                Image(user.profileImage)
-                    .resizable()
-                    .aspectRatio(contentMode: .fill)
-                    .frame(width: 40, height: 40)
-                    .clipShape(Circle())
-                
-                Button(action: {
-                    selectedUser = user
-                }) {
-                    Text(user.name)
-                        .font(.system(size: 18, weight: .semibold))
-                        .foregroundColor(.primary)
+        VStack {
+            // Header
+            headerView
+            
+            // Messages
+            messagesView
+            
+            // Input area
+            inputAreaView
+        }
+        .sheet(isPresented: $showImagePicker) {
+            ImagePicker(image: $viewModel.selectedImage)
+        }
+        .sheet(isPresented: $showVideoPicker) {
+            VideoPicker(videoURL: $viewModel.selectedVideoURL)
+        }
+        .alert("Restricción de edad", isPresented: $viewModel.showAgeRestrictionAlert) {
+            Button("OK", role: .cancel) { }
+        } message: {
+            Text("Debes ser mayor de 18 años para acceder al chat")
+        }
+        .onChange(of: viewModel.selectedImage) { _, newImage in
+            if let image = newImage {
+                Task {
+                    await viewModel.sendImage(image)
                 }
-                
-                Spacer()
+            }
+        }
+        .onChange(of: viewModel.selectedVideoURL) { _, newURL in
+            if let url = newURL {
+                Task {
+                    await viewModel.sendVideo(url)
+                }
+            }
+        }
+    }
+    
+    private var headerView: some View {
+        HStack {
+            Button(action: {
+                presentationMode.wrappedValue.dismiss()
+            }) {
+                Image(systemName: "chevron.left")
+                    .font(.system(size: 20, weight: .semibold))
+                    .foregroundColor(.primary)
+            }
+            
+            Spacer()
+            
+            Text("Chat")
+                .font(.system(size: 20, weight: .bold))
+            
+            Spacer()
+            
+            Color.clear
+                .frame(width: 20)
+        }
+        .padding()
+        .background(Color(.systemBackground))
+        .shadow(color: .black.opacity(0.1), radius: 5, y: 2)
+    }
+    
+    private var messagesView: some View {
+        ScrollView {
+            LazyVStack(spacing: 12) {
+                ForEach(viewModel.messages) { message in
+                    MessageBubble(message: message, viewModel: viewModel)
+                }
             }
             .padding()
-            .background(Color(.systemBackground))
-            .shadow(color: .black.opacity(0.1), radius: 5, y: 2)
-            
-            // Área de mensajes
-            ScrollView {
-                VStack(spacing: 16) {
-                    ForEach(sampleMessages) { message in
-                        MessageBubble(message: message)
-                            .padding(.horizontal)
-                    }
+        }
+    }
+    
+    private var inputAreaView: some View {
+        HStack(spacing: 12) {
+            // Media buttons
+            HStack(spacing: 8) {
+                Button(action: {
+                    showImagePicker = true
+                }) {
+                    Image(systemName: "photo")
+                        .font(.system(size: 20))
+                        .foregroundColor(.gray)
                 }
-                .padding(.vertical)
-            }
-            
-            // Campo de entrada de mensaje
-            HStack(spacing: 12) {
-                TextField("Mensaje", text: $messageText)
-                    .padding(12)
-                    .background(Color(.systemGray6))
-                    .cornerRadius(20)
                 
                 Button(action: {
-                    // Aquí iría la lógica para enviar el mensaje
-                    if !messageText.isEmpty {
-                        messageText = ""
+                    showVideoPicker = true
+                }) {
+                    Image(systemName: "video")
+                        .font(.system(size: 20))
+                        .foregroundColor(.gray)
+                }
+                
+                Button(action: {
+                    if viewModel.isRecording {
+                        viewModel.stopRecording()
+                    } else {
+                        viewModel.startRecording()
                     }
                 }) {
-                    Image(systemName: "paperplane.fill")
-                        .foregroundColor(.white)
-                        .padding(10)
-                        .background(Color(red: 0.9, green: 0.3, blue: 0.2))
-                        .clipShape(Circle())
+                    Image(systemName: viewModel.isRecording ? "stop.circle.fill" : "mic.circle")
+                        .font(.system(size: 20))
+                        .foregroundColor(viewModel.isRecording ? .red : .gray)
                 }
             }
-            .padding()
-            .background(Color(.systemBackground))
+            
+            // Text input
+            TextField("Escribe un mensaje...", text: $viewModel.messageText)
+                .textFieldStyle(RoundedBorderTextFieldStyle())
+                .padding(.horizontal, 8)
+            
+            // Send button
+            Button(action: {
+                Task {
+                    await viewModel.sendMessage()
+                }
+            }) {
+                Image(systemName: "arrow.up.circle.fill")
+                    .font(.system(size: 24))
+                    .foregroundColor(.blue)
+            }
         }
-        .sheet(item: $selectedUser) { user in
-            UserDetailView(user: user)
-        }
+        .padding()
+        .background(Color(.systemBackground))
+        .shadow(color: .black.opacity(0.1), radius: 5, y: -2)
     }
 }
 
 struct MessageBubble: View {
-    let message: ChatMessage
+    let message: Message
+    let viewModel: ChatViewModel
     
     var body: some View {
         HStack {
-            if message.isFromCurrentUser { Spacer() }
+            if message.isFromCurrentUser {
+                Spacer()
+            }
             
             VStack(alignment: message.isFromCurrentUser ? .trailing : .leading) {
-                Text(message.content)
-                    .padding(12)
-                    .background(message.isFromCurrentUser ?
-                        Color(red: 0.9, green: 0.3, blue: 0.2) :
-                        Color(.systemGray6))
-                    .foregroundColor(message.isFromCurrentUser ? .white : .primary)
-                    .cornerRadius(16)
+                switch message.type {
+                case .text:
+                    Text(message.content)
+                        .padding(12)
+                        .background(message.isFromCurrentUser ? Color.blue : Color(.systemGray5))
+                        .foregroundColor(message.isFromCurrentUser ? .white : .primary)
+                        .cornerRadius(16)
+                case .image:
+                    if let url = message.mediaURL {
+                        AsyncImage(url: URL(string: url)) { image in
+                            image
+                                .resizable()
+                                .scaledToFit()
+                                .frame(maxWidth: 200)
+                                .cornerRadius(12)
+                        } placeholder: {
+                            ProgressView()
+                        }
+                    }
+                case .video:
+                    if let url = message.mediaURL {
+                        let player = AVPlayer(url: URL(string: url)!)
+                        VideoPlayer(player: player)
+                            .frame(width: 200, height: 150)
+                            .cornerRadius(12)
+                    }
+                case .voice:
+                    HStack {
+                        Button(action: {
+                            if let url = message.mediaURL {
+                                viewModel.playVoiceMessage(URL(string: url)!)
+                            }
+                        }) {
+                            Image(systemName: viewModel.audioPlayer?.isPlaying == true ? "pause.circle.fill" : "play.circle.fill")
+                                .font(.system(size: 24))
+                                .foregroundColor(.blue)
+                        }
+                        
+                        if let duration = message.duration {
+                            Text(String(format: "%.1f\"", duration))
+                                .font(.caption)
+                                .foregroundColor(.gray)
+                        }
+                    }
+                }
                 
                 Text(message.timestamp)
-                    .font(.system(size: 12))
-                    .foregroundColor(.secondary)
+                    .font(.caption2)
+                    .foregroundColor(.gray)
                     .padding(.horizontal, 4)
             }
             
-            if !message.isFromCurrentUser { Spacer() }
+            if !message.isFromCurrentUser {
+                Spacer()
+            }
         }
     }
 }

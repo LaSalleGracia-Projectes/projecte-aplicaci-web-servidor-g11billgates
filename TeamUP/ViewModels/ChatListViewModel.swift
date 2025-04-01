@@ -1,25 +1,18 @@
+import Foundation
 import SwiftUI
 import Combine
 
+@MainActor
 class ChatListViewModel: ObservableObject {
-    @Published var chats: [ChatPreview] = [
-        ChatPreview(username: "Laura", lastMessage: "¿Jugamos una partida?", timestamp: "12:30", profileImage: "ToadTestIcon"),
-        ChatPreview(username: "Marc", lastMessage: "Buen juego!", timestamp: "11:45", profileImage: "DogTestIcon"),
-        ChatPreview(username: "Saten", lastMessage: "¿Mañana a las 5?", timestamp: "10:15", profileImage: "CatTestIcon"),
-        ChatPreview(username: "Roger", lastMessage: "GG WP", timestamp: "Ayer", profileImage: "TerroristTestIcon")
-    ]
+    @Published var chats: [ChatPreview] = []
+    let currentUserId: String
+    private var users: [User] = []
     
-    // Lista de usuarios para poder mostrar sus perfiles
-    private var users: [User] = [
-        User(name: "Laura", age: 25, gender: "Mujer", description: "Main support, looking for ADC", games: [("League of Legends", "Diamante"), ("World of Warcraft", "2100+")], profileImage: "ToadTestIcon"),
-        User(name: "Marc", age: 20, gender: "Hombre", description: "Mejor player del wow españa", games: [("WoW", "2900"), ("CS2", "Águila")], profileImage: "DogTestIcon"),
-        User(name: "Saten", age: 24, gender: "Mujer", description: "Hola me llamo Saten soy maja", games: [("Valorant", "Inmortal"), ("CS2", "Águila")], profileImage: "CatTestIcon"),
-        User(name: "Roger", age: 28, gender: "Hombre", description: "Jugador competitivo buscando team", games: [("Valorant", "Inmortal"), ("CS2", "Águila")], profileImage: "TerroristTestIcon")
-    ]
-    
-    private var cancellables = Set<AnyCancellable>()
-    
-    init() {
+    init(currentUserId: String) {
+        self.currentUserId = currentUserId
+        loadChats()
+        loadUsers()
+        
         // Suscribirse a notificaciones de nuevos chats
         NotificationCenter.default.publisher(for: NSNotification.Name("NewChatAdded"))
             .sink { [weak self] notification in
@@ -38,9 +31,57 @@ class ChatListViewModel: ObservableObject {
             .store(in: &cancellables)
     }
     
+    private func loadChats() {
+        // TODO: Implementar carga de chats desde el servidor
+        // Por ahora usamos datos de ejemplo
+        chats = [
+            ChatPreview(
+                id: "1",
+                username: "Marc",
+                lastMessage: "¿Jugamos una partida?",
+                timestamp: "14:30",
+                profileImage: "https://example.com/profile1.jpg"
+            ),
+            ChatPreview(
+                id: "2",
+                username: "Roger",
+                lastMessage: "¡Claro! Dame 5 minutos",
+                timestamp: "14:31",
+                profileImage: "https://example.com/profile2.jpg"
+            ),
+            ChatPreview(
+                id: "3",
+                username: "Pau",
+                lastMessage: "¿Quién más se apunta?",
+                timestamp: "14:32",
+                profileImage: "https://example.com/profile3.jpg"
+            ),
+            ChatPreview(
+                id: "4",
+                username: "Jordi",
+                lastMessage: "¡Yo!",
+                timestamp: "14:33",
+                profileImage: "https://example.com/profile4.jpg"
+            )
+        ]
+    }
+    
+    private func loadUsers() {
+        // TODO: Implementar carga de usuarios desde el servidor
+        // Por ahora usamos datos de ejemplo
+        users = [
+            User(name: "Marc", age: 20, gender: "Masculino", description: "Me encanta jugar", games: [("League of Legends", "Oro")], profileImage: "https://example.com/profile1.jpg"),
+            User(name: "Roger", age: 21, gender: "Masculino", description: "Siempre disponible", games: [("Valorant", "Platino")], profileImage: "https://example.com/profile2.jpg"),
+            User(name: "Pau", age: 19, gender: "Masculino", description: "Jugador casual", games: [("CS:GO", "Plata")], profileImage: "https://example.com/profile3.jpg"),
+            User(name: "Jordi", age: 22, gender: "Masculino", description: "Pro player", games: [("Dota 2", "Diamante")], profileImage: "https://example.com/profile4.jpg")
+        ]
+    }
+    
     func findUser(withName name: String) -> User? {
         return users.first { $0.name == name }
     }
+    
+    private var cancellables = Set<AnyCancellable>()
     
     private func addUserIfNeeded(_ user: User) {
         if !users.contains(where: { $0.name == user.name }) {
