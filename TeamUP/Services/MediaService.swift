@@ -1,6 +1,7 @@
 import Foundation
 import UIKit
 import AVFoundation
+import UniformTypeIdentifiers
 
 class MediaService {
     static let shared = MediaService()
@@ -10,6 +11,11 @@ class MediaService {
     private let maxImageSize: Int64 = 10 * 1024 * 1024 // 10MB
     private let maxVideoSize: Int64 = 50 * 1024 * 1024 // 50MB
     private let maxAudioSize: Int64 = 10 * 1024 * 1024 // 10MB
+    
+    // Tipos de archivo permitidos
+    private let allowedImageTypes = ["public.jpeg", "public.png", "public.gif"]
+    private let allowedVideoTypes = ["public.movie", "public.video"]
+    private let allowedAudioTypes = ["public.audio"]
     
     private init() {}
     
@@ -28,6 +34,21 @@ class MediaService {
         let imageSize = image.jpegData(compressionQuality: 1.0)?.count ?? 0
         if imageSize > maxImageSize {
             throw MediaError.fileTooLarge
+        }
+    }
+    
+    private func validateFileType(at url: URL, allowedTypes: [String]) throws {
+        guard let fileType = try? url.resourceValues(forKeys: [.typeIdentifierKey]).typeIdentifier,
+              let utType = UTType(fileType) else {
+            throw MediaError.invalidFileType
+        }
+        
+        let isAllowed = allowedTypes.contains { type in
+            UTType(type)?.conforms(to: utType) ?? false
+        }
+        
+        if !isAllowed {
+            throw MediaError.invalidFileType
         }
     }
     
@@ -90,6 +111,7 @@ class MediaService {
     
     func uploadVideo(_ videoURL: URL, forChat chatId: String) async throws -> String {
         try validateFileSize(at: videoURL, maxSize: maxVideoSize)
+        try validateFileType(at: videoURL, allowedTypes: allowedVideoTypes)
         
         let boundary = UUID().uuidString
         var request = URLRequest(url: URL(string: "\(baseURL)/upload-chat-media")!)
@@ -132,6 +154,7 @@ class MediaService {
     
     func uploadVoiceMessage(_ audioURL: URL, forChat chatId: String) async throws -> String {
         try validateFileSize(at: audioURL, maxSize: maxAudioSize)
+        try validateFileType(at: audioURL, allowedTypes: allowedAudioTypes)
         
         let boundary = UUID().uuidString
         var request = URLRequest(url: URL(string: "\(baseURL)/upload-chat-media")!)
@@ -184,6 +207,7 @@ enum MediaError: Error {
     case uploadFailed
     case invalidResponse
     case fileTooLarge
+    case invalidFileType
     
     var localizedDescription: String {
         switch self {
@@ -195,6 +219,8 @@ enum MediaError: Error {
             return "Respuesta inválida del servidor"
         case .fileTooLarge:
             return "El archivo es demasiado grande"
+        case .invalidFileType:
+            return "Tipo de archivo no permitido"
         }
     }
 } 
