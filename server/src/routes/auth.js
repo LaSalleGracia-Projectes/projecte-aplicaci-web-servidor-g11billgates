@@ -1,7 +1,8 @@
 const express = require('express');
 const router = express.Router();
 const { verifyGoogleToken, generateJWT } = require('../googleAuth');
-const { passport, generateSteamJWT } = require('../steamAuth');
+const { passport: steamPassport, generateSteamJWT } = require('../steamAuth');
+const { passport: appleAmazonPassport, generateAppleJWT, generateAmazonJWT } = require('../appleAmazonAuth');
 const { MongoClient } = require('mongodb');
 require('dotenv').config();
 
@@ -55,10 +56,10 @@ router.post('/google', async (req, res) => {
 });
 
 // Rutas para autenticación con Steam
-router.get('/steam', passport.authenticate('steam'));
+router.get('/steam', steamPassport.authenticate('steam'));
 
 router.get('/steam/return', 
-    passport.authenticate('steam', { failureRedirect: '/login' }),
+    steamPassport.authenticate('steam', { failureRedirect: '/login' }),
     async (req, res) => {
         try {
             const steamUser = req.user;
@@ -87,6 +88,82 @@ router.get('/steam/return',
             res.redirect(`${process.env.FRONTEND_URL}/auth/callback?token=${jwtToken}`);
         } catch (error) {
             console.error('Steam authentication error:', error);
+            res.redirect(`${process.env.FRONTEND_URL}/login?error=auth_failed`);
+        }
+    }
+);
+
+// Rutas para autenticación con Apple
+router.get('/apple', appleAmazonPassport.authenticate('apple'));
+
+router.post('/apple/callback', 
+    appleAmazonPassport.authenticate('apple', { failureRedirect: '/login' }),
+    async (req, res) => {
+        try {
+            const appleUser = req.user;
+            
+            // Check if user exists
+            let user = await db.collection('users').findOne({ appleId: appleUser.appleId });
+            
+            if (!user) {
+                // Create new user
+                user = {
+                    appleId: appleUser.appleId,
+                    email: appleUser.email,
+                    name: appleUser.name,
+                    createdAt: new Date()
+                };
+                
+                const result = await db.collection('users').insertOne(user);
+                user._id = result.insertedId;
+            }
+
+            // Generate JWT
+            const jwtToken = generateAppleJWT(user);
+            
+            // Redirigir al frontend con el token
+            res.redirect(`${process.env.FRONTEND_URL}/auth/callback?token=${jwtToken}`);
+        } catch (error) {
+            console.error('Apple authentication error:', error);
+            res.redirect(`${process.env.FRONTEND_URL}/login?error=auth_failed`);
+        }
+    }
+);
+
+// Rutas para autenticación con Amazon
+router.get('/amazon', appleAmazonPassport.authenticate('amazon', {
+    scope: ['profile', 'postal_code']
+}));
+
+router.get('/amazon/callback', 
+    appleAmazonPassport.authenticate('amazon', { failureRedirect: '/login' }),
+    async (req, res) => {
+        try {
+            const amazonUser = req.user;
+            
+            // Check if user exists
+            let user = await db.collection('users').findOne({ amazonId: amazonUser.amazonId });
+            
+            if (!user) {
+                // Create new user
+                user = {
+                    amazonId: amazonUser.amazonId,
+                    email: amazonUser.email,
+                    name: amazonUser.name,
+                    createdAt: new Date()
+                };
+                
+                const result = await db.collection('users').insertOne(user);
+                user._id = result.insertedId;
+            }
+
+            // Generate JWT
+            const jwtToken = generateAmazonJWT(user);
+            
+            // Redirigir al frontend con el token
+            res.redirect(`${process.env.FRONTEND_URL}/auth/callback?token=${jwtToken}`);
+        } catch (error) {
+            console.error('Amazon authentication error:', error);
             res.redirect(`${process.env.FRONTEND_URL}/login?error=auth_failed`);
         }
     }

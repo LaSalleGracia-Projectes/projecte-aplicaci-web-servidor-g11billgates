@@ -14,7 +14,8 @@ const ffmpegInstaller = require('@ffmpeg-installer/ffmpeg');
 const authRoutes = require('./src/routes/auth');
 const testAuthRoutes = require('./src/routes/testAuth');
 const session = require('express-session');
-const { passport } = require('./src/steamAuth');
+const { passport: steamPassport } = require('./src/steamAuth');
+const { passport: appleAmazonPassport } = require('./src/appleAmazonAuth');
 
 ffmpeg.setFfmpegPath(ffmpegInstaller.path);
 
@@ -99,8 +100,12 @@ app.use(session({
 }));
 
 // Inicialización de Passport
-app.use(passport.initialize());
-app.use(passport.session());
+app.use(steamPassport.initialize());
+app.use(steamPassport.session());
+
+// Inicialización de Passport para Apple y Amazon
+app.use(appleAmazonPassport.initialize());
+app.use(appleAmazonPassport.session());
 
 // MongoDB client
 const client = new MongoClient(uri);
