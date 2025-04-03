@@ -11,6 +11,8 @@ const fs = require('fs');
 const sharp = require('sharp');
 const ffmpeg = require('fluent-ffmpeg');
 const ffmpegInstaller = require('@ffmpeg-installer/ffmpeg');
+const authRoutes = require('./src/routes/auth');
+const testAuthRoutes = require('./src/routes/testAuth');
 
 ffmpeg.setFfmpegPath(ffmpegInstaller.path);
 
@@ -83,6 +85,8 @@ const upload = multer({
 app.use(cors());
 app.use(express.json());
 app.use('/uploads', express.static(uploadDir));
+app.use('/api/auth', authRoutes);
+app.use('/api/test', testAuthRoutes);
 
 // MongoDB client
 const client = new MongoClient(uri);
