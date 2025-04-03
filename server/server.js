@@ -13,6 +13,8 @@ const ffmpeg = require('fluent-ffmpeg');
 const ffmpegInstaller = require('@ffmpeg-installer/ffmpeg');
 const authRoutes = require('./src/routes/auth');
 const testAuthRoutes = require('./src/routes/testAuth');
+const session = require('express-session');
+const { passport } = require('./src/steamAuth');
 
 ffmpeg.setFfmpegPath(ffmpegInstaller.path);
 
@@ -87,6 +89,18 @@ app.use(express.json());
 app.use('/uploads', express.static(uploadDir));
 app.use('/api/auth', authRoutes);
 app.use('/api/test', testAuthRoutes);
+
+// Configuración de sesiones
+app.use(session({
+    secret: process.env.SESSION_SECRET || 'your-secret-key',
+    resave: false,
+    saveUninitialized: true,
+    cookie: { secure: process.env.NODE_ENV === 'production' }
+}));
+
+// Inicialización de Passport
+app.use(passport.initialize());
+app.use(passport.session());
 
 // MongoDB client
 const client = new MongoClient(uri);
