@@ -71,7 +71,7 @@ class MediaService {
         
         try handler.perform([request])
         
-        guard let observations = request.results as? [VNClassificationObservation] else {
+        guard let observations = request.results else {
             return
         }
         

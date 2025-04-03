@@ -83,7 +83,7 @@ class MongoDBManager {
         
         // Create the user document
         let userDocument: [String: Any] = [
-            "IDUsuario": user.id.uuidString,
+            "IDUsuario": user.id,
             "Nombre": user.name,
             "Correo": email,
             "Contraseña": password,

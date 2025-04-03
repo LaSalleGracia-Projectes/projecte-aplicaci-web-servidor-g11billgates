@@ -83,7 +83,7 @@ struct ChatRowView: View {
     var body: some View {
         NavigationLink(destination: {
             if let user = viewModel.findUser(withName: chat.username) {
-                ChatView(chatId: chat.id, userId: user.id.uuidString, userAge: user.age)
+                ChatView(chatId: chat.id, userId: user.id, userAge: user.age)
             }
         }) {
             HStack(spacing: 12) {
@@ -102,10 +102,9 @@ struct ChatRowView: View {
                 
                 VStack(alignment: .leading, spacing: 4) {
                     Text(chat.username)
-                        .font(.system(size: 16, weight: .bold))
-                    
+                        .font(.headline)
                     Text(chat.lastMessage)
-                        .font(.system(size: 14))
+                        .font(.subheadline)
                         .foregroundColor(.gray)
                         .lineLimit(1)
                 }
@@ -113,14 +112,12 @@ struct ChatRowView: View {
                 Spacer()
                 
                 Text(chat.timestamp)
-                    .font(.system(size: 12))
+                    .font(.caption)
                     .foregroundColor(.gray)
             }
-            .padding(.vertical, 8)
-            .padding(.horizontal, 16)
+            .padding()
             .background(Color(.systemBackground))
         }
-        Divider()
     }
 }
 

@@ -1,0 +1,1 @@
+// Eliminar el endpoint /visible que añadimos anteriormente 

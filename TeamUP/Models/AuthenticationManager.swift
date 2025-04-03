@@ -53,7 +53,7 @@ final class AuthenticationManager: ObservableObject {
             throw AuthError.notAuthenticated
         }
         
-        try await mongoManager.addUserGame(userId: user.id.uuidString, game: game, rank: rank)
+        try await mongoManager.addUserGame(userId: user.id, game: game, rank: rank)
         
         await MainActor.run {
             // Update local user data
