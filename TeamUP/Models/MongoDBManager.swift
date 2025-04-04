@@ -81,7 +81,7 @@ class MongoDBManager {
             throw MongoDBError.invalidURL
         }
         
-        // Create the user document
+        // Create the user document with all necessary fields
         let userDocument: [String: Any] = [
             "IDUsuario": user.id,
             "Nombre": user.name,
@@ -89,7 +89,10 @@ class MongoDBManager {
             "Contraseña": password,
             "FotoPerfil": user.profileImage,
             "Edad": user.age,
-            "Region": "Not specified"
+            "Region": "Not specified",
+            "Descripcion": user.description,
+            "Juegos": user.games.map { ["nombre": $0.0, "rango": $0.1] },
+            "Genero": user.gender
         ]
         
         // Create the request
@@ -168,6 +171,61 @@ class MongoDBManager {
             
         } catch {
             throw MongoDBError.gameAdditionFailed(error)
+        }
+    }
+    
+    func getRegisteredUsers() async throws -> [User] {
+        guard let url = URL(string: "\(baseURL)/users") else {
+            throw MongoDBError.invalidURL
+        }
+        
+        var request = URLRequest(url: url)
+        request.httpMethod = "GET"
+        
+        do {
+            let (data, response) = try await URLSession.shared.data(for: request)
+            
+            guard let httpResponse = response as? HTTPURLResponse else {
+                throw MongoDBError.serverError(message: "Invalid response")
+            }
+            
+            if !(200...299).contains(httpResponse.statusCode) {
+                throw MongoDBError.serverError(message: "Failed to fetch users with status code: \(httpResponse.statusCode)")
+            }
+            
+            guard let usersData = try JSONSerialization.jsonObject(with: data) as? [[String: Any]] else {
+                throw MongoDBError.invalidResponse
+            }
+            
+            return usersData.compactMap { userData -> User? in
+                guard let name = userData["Nombre"] as? String,
+                      let age = userData["Edad"] as? Int,
+                      let gender = userData["Genero"] as? String,
+                      let description = userData["Descripcion"] as? String,
+                      let games = userData["Juegos"] as? [[String: String]] else {
+                    return nil
+                }
+                
+                let gamesList = games.compactMap { game -> (String, String)? in
+                    guard let name = game["nombre"],
+                          let rank = game["rango"] else {
+                        return nil
+                    }
+                    return (name, rank)
+                }
+                
+                return User(
+                    name: name,
+                    age: age,
+                    gender: gender,
+                    description: description,
+                    games: gamesList,
+                    profileImage: userData["FotoPerfil"] as? String ?? "default_profile"
+                )
+            }
+            
+        } catch {
+            throw MongoDBError.serverError(message: error.localizedDescription)
         }
     }
 }

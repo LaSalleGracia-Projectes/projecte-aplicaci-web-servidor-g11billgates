@@ -438,7 +438,7 @@ app.post('/login', async (req, res) => {
 // Register endpoint
 app.post('/register', async (req, res) => {
     try {
-        const { Nombre, Correo, Contraseña, FotoPerfil, Edad, Region } = req.body;
+        const { Nombre, Correo, Contraseña, FotoPerfil, Edad, Region, Descripcion, Juegos, Genero } = req.body;
         
         const database = client.db(dbName);
         const usuarios = database.collection('usuario');
@@ -457,15 +457,18 @@ app.post('/register', async (req, res) => {
         const saltRounds = 10;
         const hashedPassword = await bcrypt.hash(Contraseña, saltRounds);
         
-        // Create user document with required fields
+        // Create user document with all fields
         const userDocument = {
             IDUsuario: Number(IDUsuario),
             Nombre: String(Nombre || ''),
             Correo: String(Correo || ''),
             Contraseña: hashedPassword,
             FotoPerfil: FotoPerfil ? String(FotoPerfil) : "default_profile",
-            Edad: Edad ? Number(Edad) : null,
-            Region: Region ? String(Region) : "Not specified"
+            Edad: Edad ? Number(Edad) : 18,
+            Region: Region ? String(Region) : "Not specified",
+            Descripcion: Descripcion ? String(Descripcion) : "¡Hola! Me gusta jugar videojuegos.",
+            Juegos: Array.isArray(Juegos) ? Juegos : [],
+            Genero: Genero ? String(Genero) : "Not specified"
         };
 
         // Validate required fields
@@ -875,6 +878,30 @@ app.post('/upload-chat-media', upload.single('chatMedia'), async (req, res) => {
     } catch (error) {
         console.error('Error al subir archivo multimedia:', error);
         res.status(500).json({ error: 'Error al procesar el archivo' });
+    }
+});
+
+// Get all users endpoint
+app.get('/users', async (req, res) => {
+    try {
+        const database = client.db(dbName);
+        const usuarios = database.collection('usuario');
+        
+        // Obtener todos los usuarios (excluyendo la contraseña)
+        const users = await usuarios.find({}, {
+            projection: {
+                Contraseña: 0 // Excluir la contraseña
+            }
+        }).toArray();
+        
+        res.json(users);
+        
+    } catch (error) {
+        console.error('Error fetching users:', error);
+        res.status(500).json({ 
+            error: 'Error fetching users',
+            details: error.message
+        });
     }
 });
 
