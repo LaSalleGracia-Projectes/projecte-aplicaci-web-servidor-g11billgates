@@ -1,63 +1,42 @@
 const express = require('express');
 const router = express.Router();
-const { verifyGoogleToken, generateJWT } = require('../googleAuth');
-const { passport: steamPassport, generateSteamJWT } = require('../steamAuth');
-const { passport: appleAmazonPassport, generateAppleJWT, generateAmazonJWT } = require('../appleAmazonAuth');
-const { MongoClient } = require('mongodb');
-require('dotenv').config();
+const { verifyGoogleToken } = require('../googleAuth');
+const { passport: steamPassport } = require('../steamAuth');
+const { passport: appleAmazonPassport } = require('../appleAmazonAuth');
+const { verifyToken, logAuthAttempt, rateLimiter } = require('../middleware/auth');
+const { generateUserToken, normalizeUserData, upsertUser, handleAuthError } = require('../utils/authUtils');
 
-const client = new MongoClient(process.env.MONGODB_URI);
-const db = client.db(process.env.DB_NAME);
+// Middleware común para todas las rutas de autenticación
+router.use(rateLimiter.check);
+router.use(logAuthAttempt);
 
-// Middleware para manejar errores de autenticación
-const handleAuthError = (res, error, provider) => {
-    console.error(`${provider} authentication error:`, error);
-    res.redirect(`${process.env.FRONTEND_URL}/login?error=auth_failed&provider=${provider}`);
-};
-
-// Middleware para validar tokens
-const validateToken = (req, res, next) => {
-    const token = req.body.token;
-    if (!token) {
-        return res.status(400).json({ error: 'Token is required' });
-    }
-    next();
-};
+// Ruta para verificar el estado de autenticación
+router.get('/status', verifyToken, (req, res) => {
+    res.json({
+        authenticated: true,
+        user: {
+            id: req.user.userId,
+            email: req.user.email,
+            name: req.user.name,
+            provider: req.user.provider,
+            roles: req.user.roles
+        }
+    });
+});
 
 // Ruta para autenticación con Google
-router.post('/google', validateToken, async (req, res) => {
+router.post('/google', async (req, res) => {
     try {
         const { token } = req.body;
-        const googleUser = await verifyGoogleToken(token);
+        const googleProfile = await verifyGoogleToken(token);
         
-        if (!googleUser) {
+        if (!googleProfile) {
             return res.status(401).json({ error: 'Invalid Google token' });
         }
 
-        let user = await db.collection('users').findOne({ email: googleUser.email });
-        
-        if (!user) {
-            user = {
-                email: googleUser.email,
-                name: googleUser.name,
-                picture: googleUser.picture,
-                googleId: googleUser.googleId,
-                createdAt: new Date(),
-                lastLogin: new Date(),
-                provider: 'google'
-            };
-            
-            const result = await db.collection('users').insertOne(user);
-            user._id = result.insertedId;
-        } else {
-            // Actualizar última conexión
-            await db.collection('users').updateOne(
-                { _id: user._id },
-                { $set: { lastLogin: new Date() } }
-            );
-        }
-
-        const jwtToken = generateJWT(user);
+        const userData = normalizeUserData(googleProfile, 'google');
+        const user = await upsertUser(userData);
+        const jwtToken = generateUserToken(user, 'google');
         
         res.json({
             token: jwtToken,
@@ -66,7 +45,8 @@ router.post('/google', validateToken, async (req, res) => {
                 email: user.email,
                 name: user.name,
                 picture: user.picture,
-                provider: user.provider
+                provider: user.provider,
+                roles: user.roles
             }
         });
     } catch (error) {
@@ -81,31 +61,10 @@ router.get('/steam/return',
     steamPassport.authenticate('steam', { failureRedirect: '/login' }),
     async (req, res) => {
         try {
-            const steamUser = req.user;
+            const userData = normalizeUserData(req.user, 'steam');
+            const user = await upsertUser(userData);
+            const jwtToken = generateUserToken(user, 'steam');
             
-            let user = await db.collection('users').findOne({ steamId: steamUser.steamId });
-            
-            if (!user) {
-                user = {
-                    steamId: steamUser.steamId,
-                    displayName: steamUser.displayName,
-                    profileUrl: steamUser.profileUrl,
-                    avatar: steamUser.avatar,
-                    createdAt: new Date(),
-                    lastLogin: new Date(),
-                    provider: 'steam'
-                };
-                
-                const result = await db.collection('users').insertOne(user);
-                user._id = result.insertedId;
-            } else {
-                await db.collection('users').updateOne(
-                    { _id: user._id },
-                    { $set: { lastLogin: new Date() } }
-                );
-            }
-
-            const jwtToken = generateSteamJWT(user);
             res.redirect(`${process.env.FRONTEND_URL}/auth/callback?token=${jwtToken}`);
         } catch (error) {
             handleAuthError(res, error, 'steam');
@@ -120,30 +79,10 @@ router.post('/apple/callback',
     appleAmazonPassport.authenticate('apple', { failureRedirect: '/login' }),
     async (req, res) => {
         try {
-            const appleUser = req.user;
+            const userData = normalizeUserData(req.user, 'apple');
+            const user = await upsertUser(userData);
+            const jwtToken = generateUserToken(user, 'apple');
             
-            let user = await db.collection('users').findOne({ appleId: appleUser.appleId });
-            
-            if (!user) {
-                user = {
-                    appleId: appleUser.appleId,
-                    email: appleUser.email,
-                    name: appleUser.name,
-                    createdAt: new Date(),
-                    lastLogin: new Date(),
-                    provider: 'apple'
-                };
-                
-                const result = await db.collection('users').insertOne(user);
-                user._id = result.insertedId;
-            } else {
-                await db.collection('users').updateOne(
-                    { _id: user._id },
-                    { $set: { lastLogin: new Date() } }
-                );
-            }
-
-            const jwtToken = generateAppleJWT(user);
             res.redirect(`${process.env.FRONTEND_URL}/auth/callback?token=${jwtToken}`);
         } catch (error) {
             handleAuthError(res, error, 'apple');
@@ -160,30 +99,10 @@ router.get('/amazon/callback',
     appleAmazonPassport.authenticate('amazon', { failureRedirect: '/login' }),
     async (req, res) => {
         try {
-            const amazonUser = req.user;
+            const userData = normalizeUserData(req.user, 'amazon');
+            const user = await upsertUser(userData);
+            const jwtToken = generateUserToken(user, 'amazon');
             
-            let user = await db.collection('users').findOne({ amazonId: amazonUser.amazonId });
-            
-            if (!user) {
-                user = {
-                    amazonId: amazonUser.amazonId,
-                    email: amazonUser.email,
-                    name: amazonUser.name,
-                    createdAt: new Date(),
-                    lastLogin: new Date(),
-                    provider: 'amazon'
-                };
-                
-                const result = await db.collection('users').insertOne(user);
-                user._id = result.insertedId;
-            } else {
-                await db.collection('users').updateOne(
-                    { _id: user._id },
-                    { $set: { lastLogin: new Date() } }
-                );
-            }
-
-            const jwtToken = generateAmazonJWT(user);
             res.redirect(`${process.env.FRONTEND_URL}/auth/callback?token=${jwtToken}`);
         } catch (error) {
             handleAuthError(res, error, 'amazon');
@@ -191,34 +110,10 @@ router.get('/amazon/callback',
     }
 );
 
-// Ruta para obtener el estado de autenticación
-router.get('/status', async (req, res) => {
-    try {
-        const token = req.headers.authorization?.split(' ')[1];
-        if (!token) {
-            return res.status(401).json({ error: 'No token provided' });
-        }
-
-        const decoded = jwt.verify(token, process.env.JWT_SECRET);
-        const user = await db.collection('users').findOne({ _id: new ObjectId(decoded.userId) });
-
-        if (!user) {
-            return res.status(404).json({ error: 'User not found' });
-        }
-
-        res.json({
-            isAuthenticated: true,
-            user: {
-                id: user._id,
-                email: user.email,
-                name: user.name,
-                provider: user.provider,
-                lastLogin: user.lastLogin
-            }
-        });
-    } catch (error) {
-        res.status(401).json({ error: 'Invalid token' });
-    }
+// Ruta para cerrar sesión
+router.post('/logout', verifyToken, (req, res) => {
+    req.logout();
+    res.json({ message: 'Logged out successfully' });
 });
 
 module.exports = router; 
