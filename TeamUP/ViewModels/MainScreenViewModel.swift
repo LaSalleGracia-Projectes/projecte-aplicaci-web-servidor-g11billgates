@@ -2,7 +2,15 @@ import SwiftUI
 
 class MainScreenViewModel: ObservableObject {
     @Published var currentIndex = 0
-    @Published var users: [User] = [
+    @Published var users: [User] = []
+    @Published var showMatch = false
+    @Published var matchedUser: User?
+    @Published var isLoading = true
+    
+    private let mongoManager = MongoDBManager.shared
+    
+    // Usuarios de prueba por defecto
+    private let defaultUsers = [
         User(
             name: "Alex",
             age: 23,
@@ -60,28 +68,50 @@ class MainScreenViewModel: ObservableObject {
         )
     ]
     
-    @Published var showMatch = false
-    @Published var matchedUser: User?
+    init() {
+        Task {
+            await loadUsers()
+        }
+    }
+    
+    @MainActor
+    func loadUsers() async {
+        isLoading = true
+        
+        do {
+            // Intentamos cargar usuarios registrados
+            let registeredUsers = try await mongoManager.getRegisteredUsers()
+            
+            // Combinamos usuarios registrados con usuarios de prueba
+            users = registeredUsers + defaultUsers
+            
+            // Si no hay usuarios registrados, usamos solo los usuarios de prueba
+            if registeredUsers.isEmpty {
+                users = defaultUsers
+            }
+            
+            isLoading = false
+            
+        } catch {
+            print("Error loading users: \(error)")
+            // Si hay error, usamos los usuarios de prueba
+            users = defaultUsers
+            isLoading = false
+        }
+    }
     
     func likeUser() {
-        // Comprobar si es Saten
-        if users[currentIndex].name == "Saten" {
-            matchedUser = users[currentIndex]
-            showMatch = true
-        }
-        moveToNextUser()
+        guard currentIndex < users.count else { return }
+        let likedUser = users[currentIndex]
+        currentIndex += 1
+        
+        // Aquí podrías implementar la lógica de match
+        // Por ahora solo avanzamos al siguiente usuario
     }
     
     func dislikeUser() {
-        moveToNextUser()
-    }
-    
-    private func moveToNextUser() {
-        if currentIndex < users.count - 1 {
-            currentIndex += 1
-        } else {
-            currentIndex = users.count
-        }
+        guard currentIndex < users.count else { return }
+        currentIndex += 1
     }
     
     // Esta función se usará cuando implementemos la base de datos
