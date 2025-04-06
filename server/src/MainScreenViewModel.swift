@@ -8,30 +8,23 @@ class MainScreenViewModel: ObservableObject {
     func loadUsers() async {
         isLoading = true
         do {
-            // Obtener el usuario actual y su juego seleccionado
-            if let currentUser = AuthViewModel.shared.currentUser,
-               let selectedGame = currentUser.juegos.first {
+            // Obtener el usuario actual
+            if let currentUser = AuthViewModel.shared.currentUser {
                 // Obtener usuarios compatibles
                 let compatibleUsers = try await MongoDBManager.shared.getCompatibleUsers(
-                    userId: currentUser.id,
-                    juegoId: selectedGame.juegoId
+                    userId: currentUser.id
                 )
                 
-                // Si hay usuarios compatibles, mostrarlos junto con los usuarios de prueba
-                if !compatibleUsers.isEmpty {
-                    self.users = compatibleUsers + defaultUsers
-                } else {
-                    // Si no hay usuarios compatibles, mostrar solo los usuarios de prueba
-                    self.users = defaultUsers
-                }
+                // Solo mostrar usuarios compatibles, no mostrar usuarios de prueba
+                self.users = compatibleUsers
             } else {
-                // Si no hay usuario actual o juego seleccionado, mostrar solo usuarios de prueba
-                self.users = defaultUsers
+                // Si no hay usuario actual, no mostrar nada
+                self.users = []
             }
         } catch {
             print("Error loading users: \(error)")
-            // En caso de error, mostrar usuarios de prueba
-            self.users = defaultUsers
+            // En caso de error, no mostrar nada
+            self.users = []
         }
         isLoading = false
     }

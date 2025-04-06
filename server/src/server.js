@@ -1,18 +1,12 @@
 // Endpoint para obtener usuarios con rangos compatibles
 app.get('/api/users/compatible', async (req, res) => {
     try {
-        const { userId, juegoId } = req.query;
+        const { userId } = req.query;
         
         // Obtener el usuario actual
         const currentUser = await usuario.findOne({ _id: new ObjectId(userId) });
         if (!currentUser) {
             return res.status(404).json({ error: 'Usuario no encontrado' });
-        }
-
-        // Obtener el rango del usuario actual para el juego especificado
-        const userRank = currentUser.juegos.find(j => j.juegoId.toString() === juegoId)?.rango;
-        if (!userRank) {
-            return res.status(400).json({ error: 'Usuario no tiene rango en este juego' });
         }
 
         // Convertir rangos a números para comparación
@@ -22,22 +16,30 @@ app.get('/api/users/compatible', async (req, res) => {
             'Desafiante': 9
         };
 
-        const currentRankValue = rankValues[userRank];
+        // Obtener los juegos del usuario actual
+        const userGameIds = currentUser.juegos.map(game => game.juegoId.toString());
 
-        // Buscar usuarios con rangos compatibles (±1 rango)
-        const compatibleUsers = await usuario.find({
+        // Construir la consulta para encontrar usuarios compatibles
+        const query = {
             _id: { $ne: new ObjectId(userId) },
             juegos: {
-                $elemMatch: {
-                    juegoId: new ObjectId(juegoId),
+                $all: currentUser.juegos.map(game => ({
+                    juegoId: new ObjectId(game.juegoId),
                     rango: {
                         $in: Object.entries(rankValues)
-                            .filter(([_, value]) => Math.abs(value - currentRankValue) <= 1)
+                            .filter(([_, value]) => 
+                                Math.abs(value - rankValues[game.rango]) <= 1
+                            )
                             .map(([rank]) => rank)
                     }
-                }
+                }))
             }
-        }).select('-password');
+        };
+
+        // Buscar usuarios compatibles
+        const compatibleUsers = await usuario.find(query)
+            .select('-password')
+            .sort({ 'juegos.rango': 1 }); // Ordenar por rango
 
         res.json(compatibleUsers);
     } catch (error) {

@@ -1,5 +1,5 @@
-func getCompatibleUsers(userId: String, juegoId: String) async throws -> [User] {
-    guard let url = URL(string: "\(baseURL)/api/users/compatible?userId=\(userId)&juegoId=\(juegoId)") else {
+func getCompatibleUsers(userId: String) async throws -> [User] {
+    guard let url = URL(string: "\(baseURL)/api/users/compatible?userId=\(userId)") else {
         throw NSError(domain: "Invalid URL", code: -1)
     }
     
