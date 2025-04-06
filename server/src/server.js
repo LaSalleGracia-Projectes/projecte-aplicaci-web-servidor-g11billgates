@@ -46,4 +46,101 @@ app.get('/api/users/compatible', async (req, res) => {
         console.error('Error al obtener usuarios compatibles:', error);
         res.status(500).json({ error: 'Error al obtener usuarios compatibles' });
     }
-}); 
+});
+
+// Función para crear usuarios decoy
+async function createDecoyUsers() {
+    try {
+        // Lista de juegos disponibles
+        const juegos = [
+            { nombre: 'League of Legends', rangos: ['Hierro', 'Bronce', 'Plata', 'Oro', 'Platino', 'Diamante', 'Maestro', 'Gran Maestro', 'Desafiante'] },
+            { nombre: 'Valorant', rangos: ['Hierro', 'Bronce', 'Plata', 'Oro', 'Platino', 'Diamante', 'Ascendente', 'Inmortal', 'Radiante'] },
+            { nombre: 'Counter-Strike 2', rangos: ['Plata I', 'Plata II', 'Plata III', 'Plata IV', 'Plata Elite', 'Plata Elite Master', 'Nova I', 'Nova II', 'Nova III', 'Nova Master', 'AK I', 'AK II', 'AK Cruz', 'Águila I', 'Águila II', 'Águila Master', 'Supremo', 'Global Elite'] },
+            { nombre: 'Fortnite', rangos: ['Bronce', 'Plata', 'Oro', 'Platino', 'Diamante', 'Champion', 'Unreal'] }
+        ];
+
+        // Nombres y descripciones para los usuarios decoy
+        const decoyUsers = [
+            { nombre: 'AlexGamer', edad: 22, genero: 'Masculino', descripcion: 'Busco equipo para rankeds. Main ADC en LoL y Duelista en Valorant.' },
+            { nombre: 'SarahPro', edad: 25, genero: 'Femenino', descripcion: 'Streamer y jugadora competitiva. Especialista en estrategia y análisis de juego.' },
+            { nombre: 'MikeTheTank', edad: 20, genero: 'Masculino', descripcion: 'Tank main en todos los juegos. Siempre protegiendo al equipo.' },
+            { nombre: 'LunaGaming', edad: 23, genero: 'Femenino', descripcion: 'Amante de los FPS. Alta precisión y buen trabajo en equipo.' },
+            { nombre: 'CarlosNinja', edad: 21, genero: 'Masculino', descripcion: 'Jugador versátil. Me adapto a cualquier rol y estrategia.' },
+            { nombre: 'EmmaBuilder', edad: 24, genero: 'Femenino', descripcion: 'Especialista en construcción y edición en Fortnite. Busco duo para torneos.' },
+            { nombre: 'DavidSniper', edad: 22, genero: 'Masculino', descripcion: 'AWP main en CS2. Precisión y paciencia son mis puntos fuertes.' },
+            { nombre: 'SophiaSupport', edad: 25, genero: 'Femenino', descripcion: 'Support main en LoL. Me encanta ayudar al equipo a brillar.' },
+            { nombre: 'LeoRush', edad: 20, genero: 'Masculino', descripcion: 'Jugador agresivo. Me especializo en early game y snowball.' },
+            { nombre: 'MiaTactics', edad: 23, genero: 'Femenino', descripcion: 'Estratega nata. Me gusta analizar y explotar las debilidades del rival.' },
+            { nombre: 'RyanFlex', edad: 21, genero: 'Masculino', descripcion: 'Jugador flexible. Puedo adaptarme a cualquier rol y situación.' },
+            { nombre: 'ZoeCreative', edad: 24, genero: 'Femenino', descripcion: 'Jugadora creativa. Me especializo en estrategias poco convencionales.' }
+        ];
+
+        // Crear cada usuario decoy
+        for (const user of decoyUsers) {
+            // Seleccionar 2-3 juegos aleatorios para cada usuario
+            const userGames = [];
+            const numGames = Math.floor(Math.random() * 2) + 2; // 2 o 3 juegos
+            const availableGames = [...juegos];
+            
+            for (let i = 0; i < numGames; i++) {
+                const gameIndex = Math.floor(Math.random() * availableGames.length);
+                const selectedGame = availableGames[gameIndex];
+                availableGames.splice(gameIndex, 1); // Evitar duplicados
+                
+                const rangoIndex = Math.floor(Math.random() * selectedGame.rangos.length);
+                userGames.push({
+                    juegoId: new ObjectId(), // Generar un nuevo ID para cada juego
+                    nombre: selectedGame.nombre,
+                    rango: selectedGame.rangos[rangoIndex]
+                });
+            }
+
+            // Crear el usuario decoy
+            await usuario.create({
+                nombre: user.nombre,
+                email: `${user.nombre.toLowerCase()}@example.com`,
+                password: 'decoy123', // Contraseña por defecto para usuarios decoy
+                edad: user.edad,
+                genero: user.genero,
+                descripcion: user.descripcion,
+                juegos: userGames,
+                imagenPerfil: `https://api.dicebear.com/7.x/avataaars/svg?seed=${user.nombre}` // Avatar generado
+            });
+        }
+
+        console.log('Usuarios decoy creados exitosamente');
+    } catch (error) {
+        console.error('Error al crear usuarios decoy:', error);
+    }
+}
+
+// Modificar la función de inicio del servidor
+async function startServer() {
+    try {
+        await client.connect();
+        console.log('Conexión a MongoDB establecida');
+
+        // Crear/verificar colecciones
+        await Promise.all([
+            usuario.createIndexes(),
+            mensaje.createIndexes(),
+            chat.createIndexes(),
+            matchusers.createIndexes(),
+            actividad.createIndexes(),
+            juego.createIndexes(),
+            juegousuario.createIndexes(),
+            archivos_multimedia.createIndexes()
+        ]);
+
+        // Crear usuarios decoy
+        await createDecoyUsers();
+
+        app.listen(PORT, () => {
+            console.log(`Servidor corriendo en puerto ${PORT}`);
+        });
+    } catch (error) {
+        console.error('Error al iniciar el servidor:', error);
+    }
+}
+
+startServer(); 
