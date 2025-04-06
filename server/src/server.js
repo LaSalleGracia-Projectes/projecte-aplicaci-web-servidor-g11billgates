@@ -51,13 +51,24 @@ app.get('/api/users/compatible', async (req, res) => {
 // Función para crear usuarios decoy
 async function createDecoyUsers() {
     try {
-        // Lista de juegos disponibles
-        const juegos = [
-            { nombre: 'League of Legends', rangos: ['Hierro', 'Bronce', 'Plata', 'Oro', 'Platino', 'Diamante', 'Maestro', 'Gran Maestro', 'Desafiante'] },
-            { nombre: 'Valorant', rangos: ['Hierro', 'Bronce', 'Plata', 'Oro', 'Platino', 'Diamante', 'Ascendente', 'Inmortal', 'Radiante'] },
-            { nombre: 'Counter-Strike 2', rangos: ['Plata I', 'Plata II', 'Plata III', 'Plata IV', 'Plata Elite', 'Plata Elite Master', 'Nova I', 'Nova II', 'Nova III', 'Nova Master', 'AK I', 'AK II', 'AK Cruz', 'Águila I', 'Águila II', 'Águila Master', 'Supremo', 'Global Elite'] },
-            { nombre: 'Fortnite', rangos: ['Bronce', 'Plata', 'Oro', 'Platino', 'Diamante', 'Champion', 'Unreal'] }
-        ];
+        console.log('Iniciando creación de usuarios decoy...');
+        
+        // Primero, obtener los juegos existentes de la base de datos
+        const juegosExistentes = await juego.find({});
+        console.log(`Juegos encontrados en la base de datos: ${juegosExistentes.length}`);
+        
+        if (juegosExistentes.length === 0) {
+            console.error('No hay juegos en la base de datos');
+            return;
+        }
+
+        // Lista de rangos por juego
+        const rangosPorJuego = {
+            'League of Legends': ['Hierro', 'Bronce', 'Plata', 'Oro', 'Platino', 'Diamante', 'Maestro', 'Gran Maestro', 'Desafiante'],
+            'Valorant': ['Hierro', 'Bronce', 'Plata', 'Oro', 'Platino', 'Diamante', 'Ascendente', 'Inmortal', 'Radiante'],
+            'Counter-Strike 2': ['Plata I', 'Plata II', 'Plata III', 'Plata IV', 'Plata Elite', 'Plata Elite Master', 'Nova I', 'Nova II', 'Nova III', 'Nova Master', 'AK I', 'AK II', 'AK Cruz', 'Águila I', 'Águila II', 'Águila Master', 'Supremo', 'Global Elite'],
+            'Fortnite': ['Bronce', 'Plata', 'Oro', 'Platino', 'Diamante', 'Champion', 'Unreal']
+        };
 
         // Nombres y descripciones para los usuarios decoy
         const decoyUsers = [
@@ -75,42 +86,67 @@ async function createDecoyUsers() {
             { nombre: 'ZoeCreative', edad: 24, genero: 'Femenino', descripcion: 'Jugadora creativa. Me especializo en estrategias poco convencionales.' }
         ];
 
-        // Crear cada usuario decoy
-        for (const user of decoyUsers) {
-            // Seleccionar 2-3 juegos aleatorios para cada usuario
-            const userGames = [];
-            const numGames = Math.floor(Math.random() * 2) + 2; // 2 o 3 juegos
-            const availableGames = [...juegos];
-            
-            for (let i = 0; i < numGames; i++) {
-                const gameIndex = Math.floor(Math.random() * availableGames.length);
-                const selectedGame = availableGames[gameIndex];
-                availableGames.splice(gameIndex, 1); // Evitar duplicados
-                
-                const rangoIndex = Math.floor(Math.random() * selectedGame.rangos.length);
-                userGames.push({
-                    juegoId: new ObjectId(), // Generar un nuevo ID para cada juego
-                    nombre: selectedGame.nombre,
-                    rango: selectedGame.rangos[rangoIndex]
-                });
-            }
-
-            // Crear el usuario decoy
-            await usuario.create({
-                nombre: user.nombre,
-                email: `${user.nombre.toLowerCase()}@example.com`,
-                password: 'decoy123', // Contraseña por defecto para usuarios decoy
-                edad: user.edad,
-                genero: user.genero,
-                descripcion: user.descripcion,
-                juegos: userGames,
-                imagenPerfil: `https://api.dicebear.com/7.x/avataaars/svg?seed=${user.nombre}` // Avatar generado
-            });
+        // Verificar si ya existen usuarios decoy
+        const existingDecoy = await usuario.findOne({ email: 'alexgamer@example.com' });
+        if (existingDecoy) {
+            console.log('Los usuarios decoy ya existen en la base de datos');
+            return;
         }
 
-        console.log('Usuarios decoy creados exitosamente');
+        // Crear cada usuario decoy
+        for (const user of decoyUsers) {
+            try {
+                // Seleccionar 2-3 juegos aleatorios para cada usuario
+                const userGames = [];
+                const numGames = Math.floor(Math.random() * 2) + 2; // 2 o 3 juegos
+                const availableGames = [...juegosExistentes];
+                
+                for (let i = 0; i < numGames; i++) {
+                    const gameIndex = Math.floor(Math.random() * availableGames.length);
+                    const selectedGame = availableGames[gameIndex];
+                    availableGames.splice(gameIndex, 1); // Evitar duplicados
+                    
+                    const rangos = rangosPorJuego[selectedGame.nombre];
+                    if (!rangos) {
+                        console.error(`No se encontraron rangos para el juego: ${selectedGame.nombre}`);
+                        continue;
+                    }
+                    
+                    const rangoIndex = Math.floor(Math.random() * rangos.length);
+                    
+                    userGames.push({
+                        juegoId: selectedGame._id,
+                        nombre: selectedGame.nombre,
+                        rango: rangos[rangoIndex]
+                    });
+                }
+
+                if (userGames.length === 0) {
+                    console.error(`No se pudieron asignar juegos al usuario ${user.nombre}`);
+                    continue;
+                }
+
+                // Crear el usuario decoy
+                const newUser = await usuario.create({
+                    nombre: user.nombre,
+                    email: `${user.nombre.toLowerCase()}@example.com`,
+                    password: 'decoy123', // Contraseña por defecto para usuarios decoy
+                    edad: user.edad,
+                    genero: user.genero,
+                    descripcion: user.descripcion,
+                    juegos: userGames,
+                    imagenPerfil: `https://api.dicebear.com/7.x/avataaars/svg?seed=${user.nombre}` // Avatar generado
+                });
+
+                console.log(`Usuario decoy creado exitosamente: ${newUser.nombre}`);
+            } catch (error) {
+                console.error(`Error al crear usuario decoy ${user.nombre}:`, error);
+            }
+        }
+
+        console.log('Proceso de creación de usuarios decoy completado');
     } catch (error) {
-        console.error('Error al crear usuarios decoy:', error);
+        console.error('Error general al crear usuarios decoy:', error);
     }
 }
 
