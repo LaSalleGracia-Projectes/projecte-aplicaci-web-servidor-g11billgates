@@ -23,16 +23,16 @@ app.get('/api/users/compatible', async (req, res) => {
         const query = {
             _id: { $ne: new ObjectId(userId) },
             juegos: {
-                $all: currentUser.juegos.map(game => ({
-                    juegoId: new ObjectId(game.juegoId),
+                $elemMatch: {
+                    juegoId: { $in: currentUser.juegos.map(game => new ObjectId(game.juegoId)) },
                     rango: {
                         $in: Object.entries(rankValues)
                             .filter(([_, value]) => 
-                                Math.abs(value - rankValues[game.rango]) <= 1
+                                Math.abs(value - rankValues[currentUser.juegos[0].rango]) <= 1
                             )
                             .map(([rank]) => rank)
                     }
-                }))
+                }
             }
         };
 

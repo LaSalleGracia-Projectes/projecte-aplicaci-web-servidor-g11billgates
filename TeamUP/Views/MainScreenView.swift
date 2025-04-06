@@ -192,11 +192,27 @@ struct CardView: View {
         ZStack {
             VStack(spacing: 0) {
                 // Imagen del usuario
-                Image(user.profileImage)
-                    .resizable()
-                    .aspectRatio(contentMode: .fill)
-                    .frame(width: cardWidth, height: cardWidth)
-                    .clipped()
+                if user.profileImage.starts(with: "http") {
+                    AsyncImage(url: URL(string: user.profileImage)) { image in
+                        image
+                            .resizable()
+                            .aspectRatio(contentMode: .fill)
+                            .frame(width: cardWidth, height: cardWidth)
+                            .clipped()
+                    } placeholder: {
+                        Image(systemName: "person.circle.fill")
+                            .resizable()
+                            .aspectRatio(contentMode: .fit)
+                            .frame(width: cardWidth, height: cardWidth)
+                            .foregroundColor(.gray)
+                    }
+                } else {
+                    Image(user.profileImage)
+                        .resizable()
+                        .aspectRatio(contentMode: .fill)
+                        .frame(width: cardWidth, height: cardWidth)
+                        .clipped()
+                }
                 
                 // Información del usuario
                 VStack(alignment: .leading, spacing: 15) {

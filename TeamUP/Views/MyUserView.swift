@@ -52,12 +52,30 @@ struct MyUserView: View {
                     VStack(spacing: 20) {
                         // Imagen de perfil
                         ZStack {
-                            Image(viewModel.user.profileImage)
-                                .resizable()
-                                .aspectRatio(contentMode: .fill)
-                                .frame(width: 120, height: 120)
-                                .clipShape(Circle())
-                                .overlay(Circle().stroke(Color(red: 0.9, green: 0.3, blue: 0.2), lineWidth: 3))
+                            if viewModel.user.profileImage.starts(with: "http") {
+                                AsyncImage(url: URL(string: viewModel.user.profileImage)) { image in
+                                    image
+                                        .resizable()
+                                        .aspectRatio(contentMode: .fill)
+                                        .frame(width: 120, height: 120)
+                                        .clipShape(Circle())
+                                        .overlay(Circle().stroke(Color(red: 0.9, green: 0.3, blue: 0.2), lineWidth: 3))
+                                } placeholder: {
+                                    Image(systemName: "person.circle.fill")
+                                        .resizable()
+                                        .aspectRatio(contentMode: .fit)
+                                        .frame(width: 120, height: 120)
+                                        .foregroundColor(.gray)
+                                        .overlay(Circle().stroke(Color(red: 0.9, green: 0.3, blue: 0.2), lineWidth: 3))
+                                }
+                            } else {
+                                Image(viewModel.user.profileImage)
+                                    .resizable()
+                                    .aspectRatio(contentMode: .fill)
+                                    .frame(width: 120, height: 120)
+                                    .clipShape(Circle())
+                                    .overlay(Circle().stroke(Color(red: 0.9, green: 0.3, blue: 0.2), lineWidth: 3))
+                            }
                             
                             if viewModel.isEditingProfile {
                                 Button(action: {

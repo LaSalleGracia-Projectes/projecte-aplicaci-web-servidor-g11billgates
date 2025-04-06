@@ -135,18 +135,114 @@ async function seedUsuarios(database) {
 
         // Nombres y descripciones para los usuarios decoy
         const decoyUsers = [
-            { nombre: 'AlexGamer', edad: 22, genero: 'Masculino', descripcion: 'Busco equipo para rankeds. Main ADC en LoL y Duelista en Valorant.' },
-            { nombre: 'SarahPro', edad: 25, genero: 'Femenino', descripcion: 'Streamer y jugadora competitiva. Especialista en estrategia y análisis de juego.' },
-            { nombre: 'MikeTheTank', edad: 20, genero: 'Masculino', descripcion: 'Tank main en todos los juegos. Siempre protegiendo al equipo.' },
-            { nombre: 'LunaGaming', edad: 23, genero: 'Femenino', descripcion: 'Amante de los FPS. Alta precisión y buen trabajo en equipo.' },
-            { nombre: 'CarlosNinja', edad: 21, genero: 'Masculino', descripcion: 'Jugador versátil. Me adapto a cualquier rol y estrategia.' },
-            { nombre: 'EmmaBuilder', edad: 24, genero: 'Femenino', descripcion: 'Especialista en construcción y edición en Fortnite. Busco duo para torneos.' },
-            { nombre: 'DavidSniper', edad: 22, genero: 'Masculino', descripcion: 'AWP main en CS2. Precisión y paciencia son mis puntos fuertes.' },
-            { nombre: 'SophiaSupport', edad: 25, genero: 'Femenino', descripcion: 'Support main en LoL. Me encanta ayudar al equipo a brillar.' },
-            { nombre: 'LeoRush', edad: 20, genero: 'Masculino', descripcion: 'Jugador agresivo. Me especializo en early game y snowball.' },
-            { nombre: 'MiaTactics', edad: 23, genero: 'Femenino', descripcion: 'Estratega nata. Me gusta analizar y explotar las debilidades del rival.' },
-            { nombre: 'RyanFlex', edad: 21, genero: 'Masculino', descripcion: 'Jugador flexible. Puedo adaptarme a cualquier rol y situación.' },
-            { nombre: 'ZoeCreative', edad: 24, genero: 'Femenino', descripcion: 'Jugadora creativa. Me especializo en estrategias poco convencionales.' }
+            { 
+                nombre: 'AlexGamer', 
+                edad: 22, 
+                genero: 'Masculino', 
+                descripcion: 'Busco equipo para rankeds. Main ADC en LoL y Duelista en Valorant. Jugador competitivo con más de 5 años de experiencia. Disponible por las tardes y fines de semana.',
+                region: 'Europa',
+                idiomas: ['Español', 'Inglés'],
+                imagen: 'DwarfTestIcon'
+            },
+            { 
+                nombre: 'SarahPro', 
+                edad: 25, 
+                genero: 'Femenino', 
+                descripcion: 'Streamer y jugadora competitiva. Especialista en estrategia y análisis de juego. Más de 10k seguidores en Twitch. Busco equipo para torneos profesionales.',
+                region: 'América del Norte',
+                idiomas: ['Inglés', 'Español'],
+                imagen: 'ToadTestIcon'
+            },
+            { 
+                nombre: 'MikeTheTank', 
+                edad: 20, 
+                genero: 'Masculino', 
+                descripcion: 'Tank main en todos los juegos. Siempre protegiendo al equipo. Experiencia en torneos locales y regionales. Busco equipo para competir a nivel profesional.',
+                region: 'Europa',
+                idiomas: ['Español', 'Inglés', 'Francés'],
+                imagen: 'TerroristTestIcon'
+            },
+            { 
+                nombre: 'LunaGaming', 
+                edad: 23, 
+                genero: 'Femenino', 
+                descripcion: 'Amante de los FPS. Alta precisión y buen trabajo en equipo. Jugadora profesional con experiencia en múltiples torneos. Disponible para prácticas diarias.',
+                region: 'Asia',
+                idiomas: ['Japonés', 'Inglés'],
+                imagen: 'CatTestIcon'
+            },
+            { 
+                nombre: 'CarlosNinja', 
+                edad: 21, 
+                genero: 'Masculino', 
+                descripcion: 'Jugador versátil. Me adapto a cualquier rol y estrategia. Experiencia en coaching y análisis de partidas. Busco equipo para mejorar y competir.',
+                region: 'América Latina',
+                idiomas: ['Español', 'Portugués', 'Inglés'],
+                imagen: 'DogTestIcon'
+            },
+            { 
+                nombre: 'EmmaBuilder', 
+                edad: 24, 
+                genero: 'Femenino', 
+                descripcion: 'Especialista en construcción y edición en Fortnite. Busco duo para torneos. Ganadora de varios torneos locales. Disponible para prácticas intensivas.',
+                region: 'Europa',
+                idiomas: ['Inglés', 'Alemán'],
+                imagen: 'DwarfTestIcon'
+            },
+            { 
+                nombre: 'DavidSniper', 
+                edad: 22, 
+                genero: 'Masculino', 
+                descripcion: 'AWP main en CS2. Precisión y paciencia son mis puntos fuertes. Jugador profesional con experiencia en torneos internacionales. Busco equipo para ESL.',
+                region: 'Europa',
+                idiomas: ['Español', 'Inglés', 'Ruso'],
+                imagen: 'ToadTestIcon'
+            },
+            { 
+                nombre: 'SophiaSupport', 
+                edad: 25, 
+                genero: 'Femenino', 
+                descripcion: 'Support main en LoL. Me encanta ayudar al equipo a brillar. Experiencia en torneos universitarios y locales. Busco equipo para competir en ligas.',
+                region: 'América del Norte',
+                idiomas: ['Inglés', 'Español'],
+                imagen: 'TerroristTestIcon'
+            },
+            { 
+                nombre: 'LeoRush', 
+                edad: 20, 
+                genero: 'Masculino', 
+                descripcion: 'Jugador agresivo. Me especializo en early game y snowball. Jugador profesional con experiencia en múltiples juegos. Busco equipo para torneos.',
+                region: 'Asia',
+                idiomas: ['Coreano', 'Inglés'],
+                imagen: 'CatTestIcon'
+            },
+            { 
+                nombre: 'MiaTactics', 
+                edad: 23, 
+                genero: 'Femenino', 
+                descripcion: 'Estratega nata. Me gusta analizar y explotar las debilidades del rival. Experiencia en coaching y análisis de partidas. Busco equipo para competir.',
+                region: 'Europa',
+                idiomas: ['Inglés', 'Francés', 'Alemán'],
+                imagen: 'DogTestIcon'
+            },
+            { 
+                nombre: 'RyanFlex', 
+                edad: 21, 
+                genero: 'Masculino', 
+                descripcion: 'Jugador flexible. Puedo adaptarme a cualquier rol y situación. Experiencia en múltiples juegos y torneos. Busco equipo para competir a nivel profesional.',
+                region: 'América del Norte',
+                idiomas: ['Inglés', 'Español'],
+                imagen: 'DwarfTestIcon'
+            },
+            { 
+                nombre: 'ZoeCreative', 
+                edad: 24, 
+                genero: 'Femenino', 
+                descripcion: 'Jugadora creativa. Me especializo en estrategias poco convencionales. Experiencia en torneos y creación de contenido. Busco equipo para innovar y competir.',
+                region: 'Europa',
+                idiomas: ['Inglés', 'Español', 'Italiano'],
+                imagen: 'ToadTestIcon'
+            }
         ];
 
         // Crear cada usuario decoy
@@ -191,7 +287,9 @@ async function seedUsuarios(database) {
                     Genero: user.genero,
                     Descripcion: user.descripcion,
                     Juegos: userGames,
-                    FotoPerfil: `https://api.dicebear.com/7.x/avataaars/svg?seed=${user.nombre}`,
+                    FotoPerfil: user.imagen,
+                    Region: user.region,
+                    Idiomas: user.idiomas,
                     bloqueado: false,
                     IDUsuario: Math.floor(Math.random() * 1000000) // ID único para cada usuario
                 });

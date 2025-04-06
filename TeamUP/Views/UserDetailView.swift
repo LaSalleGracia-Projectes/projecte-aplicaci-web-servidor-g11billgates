@@ -5,11 +5,27 @@ struct UserDetailView: View {
     
     var body: some View {
         VStack {
-            Image(user.profileImage)
-                .resizable()
-                .aspectRatio(contentMode: .fill)
-                .frame(width: 150, height: 150)
-                .clipShape(Circle())
+            if user.profileImage.starts(with: "http") {
+                AsyncImage(url: URL(string: user.profileImage)) { image in
+                    image
+                        .resizable()
+                        .aspectRatio(contentMode: .fill)
+                        .frame(width: 150, height: 150)
+                        .clipShape(Circle())
+                } placeholder: {
+                    Image(systemName: "person.circle.fill")
+                        .resizable()
+                        .aspectRatio(contentMode: .fit)
+                        .frame(width: 150, height: 150)
+                        .foregroundColor(.gray)
+                }
+            } else {
+                Image(user.profileImage)
+                    .resizable()
+                    .aspectRatio(contentMode: .fill)
+                    .frame(width: 150, height: 150)
+                    .clipShape(Circle())
+            }
             
             Text(user.name)
                 .font(.system(size: 28, weight: .bold))
