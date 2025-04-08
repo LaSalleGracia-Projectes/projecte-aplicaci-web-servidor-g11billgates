@@ -228,6 +228,158 @@ class MongoDBManager {
             throw MongoDBError.serverError(message: error.localizedDescription)
         }
     }
+    
+    // Función para dar like a un usuario
+    func likeUser(userId: String, likedUserId: String) async throws -> Bool {
+        guard let url = URL(string: "\(baseURL)/api/users/\(userId)/like") else {
+            throw MongoDBError.invalidURL
+        }
+        
+        let likeData: [String: Any] = [
+            "likedUserId": likedUserId
+        ]
+        
+        var request = URLRequest(url: url)
+        request.httpMethod = "POST"
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        
+        do {
+            let jsonData = try JSONSerialization.data(withJSONObject: likeData)
+            request.httpBody = jsonData
+            
+            let (data, response) = try await URLSession.shared.data(for: request)
+            
+            guard let httpResponse = response as? HTTPURLResponse else {
+                throw MongoDBError.serverError(message: "Invalid response")
+            }
+            
+            if !(200...299).contains(httpResponse.statusCode) {
+                throw MongoDBError.serverError(message: "Like failed with status code: \(httpResponse.statusCode)")
+            }
+            
+            guard let responseDict = try JSONSerialization.jsonObject(with: data) as? [String: Any],
+                  let match = responseDict["match"] as? Bool else {
+                throw MongoDBError.invalidResponse
+            }
+            
+            return match
+            
+        } catch {
+            throw MongoDBError.serverError(message: error.localizedDescription)
+        }
+    }
+    
+    // Función para obtener los matches de un usuario
+    func getMatches(userId: String) async throws -> [User] {
+        guard let url = URL(string: "\(baseURL)/api/users/\(userId)/matches") else {
+            throw MongoDBError.invalidURL
+        }
+        
+        var request = URLRequest(url: url)
+        request.httpMethod = "GET"
+        
+        do {
+            let (data, response) = try await URLSession.shared.data(for: request)
+            
+            guard let httpResponse = response as? HTTPURLResponse else {
+                throw MongoDBError.serverError(message: "Invalid response")
+            }
+            
+            if !(200...299).contains(httpResponse.statusCode) {
+                throw MongoDBError.serverError(message: "Failed to fetch matches with status code: \(httpResponse.statusCode)")
+            }
+            
+            guard let usersData = try JSONSerialization.jsonObject(with: data) as? [[String: Any]] else {
+                throw MongoDBError.invalidResponse
+            }
+            
+            return usersData.compactMap { userData -> User? in
+                guard let name = userData["Nombre"] as? String,
+                      let age = userData["Edad"] as? Int,
+                      let gender = userData["Genero"] as? String,
+                      let description = userData["Descripcion"] as? String,
+                      let games = userData["Juegos"] as? [[String: String]] else {
+                    return nil
+                }
+                
+                let gamesList = games.compactMap { game -> (String, String)? in
+                    guard let name = game["nombre"],
+                          let rank = game["rango"] else {
+                        return nil
+                    }
+                    return (name, rank)
+                }
+                
+                return User(
+                    name: name,
+                    age: age,
+                    gender: gender,
+                    description: description,
+                    games: gamesList,
+                    profileImage: userData["FotoPerfil"] as? String ?? "default_profile"
+                )
+            }
+            
+        } catch {
+            throw MongoDBError.serverError(message: error.localizedDescription)
+        }
+    }
+    
+    // Función para obtener usuarios compatibles
+    func getCompatibleUsers(userId: String) async throws -> [User] {
+        guard let url = URL(string: "\(baseURL)/api/users/compatible/\(userId)") else {
+            throw MongoDBError.invalidURL
+        }
+        
+        var request = URLRequest(url: url)
+        request.httpMethod = "GET"
+        
+        do {
+            let (data, response) = try await URLSession.shared.data(for: request)
+            
+            guard let httpResponse = response as? HTTPURLResponse else {
+                throw MongoDBError.serverError(message: "Invalid response")
+            }
+            
+            if !(200...299).contains(httpResponse.statusCode) {
+                throw MongoDBError.serverError(message: "Failed to fetch compatible users with status code: \(httpResponse.statusCode)")
+            }
+            
+            guard let usersData = try JSONSerialization.jsonObject(with: data) as? [[String: Any]] else {
+                throw MongoDBError.invalidResponse
+            }
+            
+            return usersData.compactMap { userData -> User? in
+                guard let name = userData["Nombre"] as? String,
+                      let age = userData["Edad"] as? Int,
+                      let gender = userData["Genero"] as? String,
+                      let description = userData["Descripcion"] as? String,
+                      let games = userData["Juegos"] as? [[String: String]] else {
+                    return nil
+                }
+                
+                let gamesList = games.compactMap { game -> (String, String)? in
+                    guard let name = game["nombre"],
+                          let rank = game["rango"] else {
+                        return nil
+                    }
+                    return (name, rank)
+                }
+                
+                return User(
+                    name: name,
+                    age: age,
+                    gender: gender,
+                    description: description,
+                    games: gamesList,
+                    profileImage: userData["FotoPerfil"] as? String ?? "default_profile"
+                )
+            }
+            
+        } catch {
+            throw MongoDBError.serverError(message: error.localizedDescription)
+        }
+    }
 }
 
 enum MongoDBError: Error {

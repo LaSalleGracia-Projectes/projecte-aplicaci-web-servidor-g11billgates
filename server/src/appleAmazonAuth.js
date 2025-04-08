@@ -6,27 +6,23 @@ const fs = require('fs');
 require('dotenv').config();
 
 // Validación de variables de entorno
-const validateEnvVars = () => {
-    const requiredVars = [
-        'APPLE_CLIENT_ID',
-        'APPLE_TEAM_ID',
-        'APPLE_KEY_ID',
-        'APPLE_PRIVATE_KEY_PATH',
-        'AMAZON_CLIENT_ID',
-        'AMAZON_CLIENT_SECRET',
-        'JWT_SECRET'
-    ];
+function validateEnvVars() {
+    const requiredVars = {
+        APPLE_TEAM_ID: process.env.APPLE_TEAM_ID,
+        APPLE_SERVICE_ID: process.env.APPLE_SERVICE_ID,
+        APPLE_KEY_ID: process.env.APPLE_KEY_ID,
+        APPLE_PRIVATE_KEY_PATH: process.env.APPLE_PRIVATE_KEY_PATH,
+        AMAZON_CLIENT_ID: process.env.AMAZON_CLIENT_ID,
+        AMAZON_CLIENT_SECRET: process.env.AMAZON_CLIENT_SECRET
+    };
 
-    const missingVars = requiredVars.filter(varName => !process.env[varName]);
-    if (missingVars.length > 0) {
-        throw new Error(`Missing required environment variables: ${missingVars.join(', ')}`);
-    }
-
-    // Verificar que el archivo de clave privada existe
-    if (!fs.existsSync(process.env.APPLE_PRIVATE_KEY_PATH)) {
-        throw new Error(`Apple private key file not found at: ${process.env.APPLE_PRIVATE_KEY_PATH}`);
-    }
-};
+    // Log warning instead of throwing error
+    Object.entries(requiredVars).forEach(([key, value]) => {
+        if (!value) {
+            console.warn(`Warning: ${key} is not set in environment variables`);
+        }
+    });
+}
 
 try {
     validateEnvVars();

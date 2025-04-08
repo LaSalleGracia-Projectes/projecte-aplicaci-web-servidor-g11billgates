@@ -170,6 +170,37 @@ async function startServer() {
         // Crear usuarios decoy
         await createDecoyUsers();
 
+        // Validador existente para usuario
+        await database.command({
+          collMod: "usuario",
+          validator: {
+            $jsonSchema: {
+              bsonType: "object",
+              required: ["Nombre", "Correo", "Contraseña"],
+              properties: {
+                IDUsuario: { bsonType: ["int", "number"] },
+                Nombre: { bsonType: "string" },
+                Correo: { bsonType: "string" },
+                Contraseña: { bsonType: "string" },
+                FotoPerfil: { bsonType: ["string", "null"] },
+                Edad: { bsonType: ["int", "number", "null"] },
+                Region: { bsonType: ["string", "null"] },
+                bloqueado: { bsonType: "bool" },
+                likes: { 
+                  bsonType: "array",
+                  items: { bsonType: "objectId" }
+                },
+                matches: { 
+                  bsonType: "array",
+                  items: { bsonType: "objectId" }
+                }
+              }
+            }
+          },
+          validationLevel: "moderate",
+          validationAction: "error"
+        });
+
         app.listen(PORT, () => {
             console.log(`Servidor corriendo en puerto ${PORT}`);
         });
@@ -177,5 +208,95 @@ async function startServer() {
         console.error('Error al iniciar el servidor:', error);
     }
 }
+
+// Endpoint para dar like a un usuario
+app.post('/api/users/:userId/like', async (req, res) => {
+    try {
+        const { userId } = req.params;
+        const { likedUserId } = req.body;
+        
+        const database = client.db(dbName);
+        const usuarios = database.collection('usuario');
+        
+        // Añadir el like
+        await usuarios.updateOne(
+            { IDUsuario: Number(userId) },
+            { $addToSet: { likes: likedUserId } }
+        );
+        
+        // Verificar si hay match
+        const likedUser = await usuarios.findOne({ IDUsuario: Number(likedUserId) });
+        if (likedUser.likes && likedUser.likes.includes(userId)) {
+            // Hay match! Añadir a ambos usuarios a sus listas de matches
+            await usuarios.updateOne(
+                { IDUsuario: Number(userId) },
+                { $addToSet: { matches: likedUserId } }
+            );
+            await usuarios.updateOne(
+                { IDUsuario: Number(likedUserId) },
+                { $addToSet: { matches: userId } }
+            );
+            
+            res.json({ match: true, message: '¡Match!' });
+        } else {
+            res.json({ match: false, message: 'Like enviado' });
+        }
+    } catch (error) {
+        console.error('Error en like:', error);
+        res.status(500).json({ error: 'Error al procesar el like' });
+    }
+});
+
+// Endpoint para obtener los matches de un usuario
+app.get('/api/users/:userId/matches', async (req, res) => {
+    try {
+        const { userId } = req.params;
+        
+        const database = client.db(dbName);
+        const usuarios = database.collection('usuario');
+        
+        const user = await usuarios.findOne({ IDUsuario: Number(userId) });
+        if (!user) {
+            return res.status(404).json({ error: 'Usuario no encontrado' });
+        }
+        
+        const matches = await usuarios.find({
+            IDUsuario: { $in: user.matches || [] }
+        }).toArray();
+        
+        res.json(matches);
+    } catch (error) {
+        console.error('Error al obtener matches:', error);
+        res.status(500).json({ error: 'Error al obtener matches' });
+    }
+});
+
+// Endpoint para obtener usuarios compatibles (excluyendo likes y matches)
+app.get('/api/users/compatible/:userId', async (req, res) => {
+    try {
+        const { userId } = req.params;
+        
+        const database = client.db(dbName);
+        const usuarios = database.collection('usuario');
+        
+        const currentUser = await usuarios.findOne({ IDUsuario: Number(userId) });
+        if (!currentUser) {
+            return res.status(404).json({ error: 'Usuario no encontrado' });
+        }
+        
+        // Obtener usuarios que no sean el actual, no estén en likes ni en matches
+        const compatibleUsers = await usuarios.find({
+            IDUsuario: { 
+                $ne: Number(userId),
+                $nin: [...(currentUser.likes || []), ...(currentUser.matches || [])]
+            }
+        }).toArray();
+        
+        res.json(compatibleUsers);
+    } catch (error) {
+        console.error('Error al obtener usuarios compatibles:', error);
+        res.status(500).json({ error: 'Error al obtener usuarios compatibles' });
+    }
+});
 
 startServer(); 

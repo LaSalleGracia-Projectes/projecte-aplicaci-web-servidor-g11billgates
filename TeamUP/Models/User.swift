@@ -8,6 +8,8 @@ struct User: Identifiable, Decodable {
     var description: String
     var games: [(String, String)] // (nombre del juego, rango)
     var profileImage: String
+    var likes: [String] = []
+    var matches: [String] = []
     
     enum CodingKeys: String, CodingKey {
         case id = "_id"
@@ -17,9 +19,11 @@ struct User: Identifiable, Decodable {
         case description = "bio"
         case games = "interests"
         case profileImage
+        case likes
+        case matches
     }
     
-    init(id: String = UUID().uuidString, name: String, age: Int, gender: String, description: String, games: [(String, String)], profileImage: String) {
+    init(id: String = UUID().uuidString, name: String, age: Int, gender: String, description: String, games: [(String, String)], profileImage: String, likes: [String] = [], matches: [String] = []) {
         self.id = id
         self.name = name
         self.age = age
@@ -27,6 +31,8 @@ struct User: Identifiable, Decodable {
         self.description = description
         self.games = games
         self.profileImage = profileImage
+        self.likes = likes
+        self.matches = matches
     }
     
     init(from decoder: Decoder) throws {
@@ -37,6 +43,8 @@ struct User: Identifiable, Decodable {
         gender = try container.decode(String.self, forKey: .gender)
         description = try container.decode(String.self, forKey: .description)
         profileImage = try container.decode(String.self, forKey: .profileImage)
+        likes = try container.decodeIfPresent([String].self, forKey: .likes) ?? []
+        matches = try container.decodeIfPresent([String].self, forKey: .matches) ?? []
         
         // Decodificar los intereses como juegos
         let interests = try container.decode([String].self, forKey: .games)
