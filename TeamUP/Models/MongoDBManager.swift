@@ -229,43 +229,52 @@ class MongoDBManager {
         }
     }
     
-    // Función para dar like a un usuario
-    func likeUser(userId: String, likedUserId: String) async throws -> Bool {
-        guard let url = URL(string: "\(baseURL)/api/users/\(userId)/like") else {
-            throw MongoDBError.invalidURL
-        }
-        
-        let likeData: [String: Any] = [
-            "likedUserId": likedUserId
-        ]
-        
+    struct LikeResponse: Codable {
+        let isMatch: Bool
+        let matchedUser: MatchedUser?
+        let message: String
+    }
+
+    struct MatchedUser: Codable {
+        let id: Int
+        let name: String
+        let profileImage: String
+    }
+
+    struct ErrorResponse: Codable {
+        let error: String
+        let details: String?
+    }
+
+    func likeUser(userId: String, likedUserId: String) async throws -> LikeResponse {
+        let url = URL(string: "\(baseURL)/api/users/\(userId)/like")!
         var request = URLRequest(url: url)
         request.httpMethod = "POST"
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
         
-        do {
-            let jsonData = try JSONSerialization.data(withJSONObject: likeData)
-            request.httpBody = jsonData
-            
-            let (data, response) = try await URLSession.shared.data(for: request)
-            
-            guard let httpResponse = response as? HTTPURLResponse else {
-                throw MongoDBError.serverError(message: "Invalid response")
-            }
-            
-            if !(200...299).contains(httpResponse.statusCode) {
-                throw MongoDBError.serverError(message: "Like failed with status code: \(httpResponse.statusCode)")
-            }
-            
-            guard let responseDict = try JSONSerialization.jsonObject(with: data) as? [String: Any],
-                  let match = responseDict["match"] as? Bool else {
-                throw MongoDBError.invalidResponse
-            }
-            
-            return match
-            
-        } catch {
-            throw MongoDBError.serverError(message: error.localizedDescription)
+        // Añadir token de autenticación si existe
+        if let token = UserDefaults.standard.string(forKey: "authToken") {
+            request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
+        }
+        
+        let body = ["likedUserId": likedUserId]
+        request.httpBody = try JSONSerialization.data(withJSONObject: body)
+        
+        let (data, response) = try await URLSession.shared.data(for: request)
+        
+        guard let httpResponse = response as? HTTPURLResponse else {
+            throw MongoDBError.serverError(message: "Respuesta inválida del servidor")
+        }
+        
+        switch httpResponse.statusCode {
+        case 200:
+            let response = try JSONDecoder().decode(LikeResponse.self, from: data)
+            return response
+        case 400, 401, 404:
+            let errorResponse = try JSONDecoder().decode(ErrorResponse.self, from: data)
+            throw MongoDBError.serverError(message: errorResponse.error)
+        default:
+            throw MongoDBError.serverError(message: "Error desconocido del servidor")
         }
     }
     
@@ -380,6 +389,42 @@ class MongoDBManager {
             throw MongoDBError.serverError(message: error.localizedDescription)
         }
     }
+
+    func getUsers() async throws -> [User] {
+        let url = URL(string: "\(baseURL)/api/users")!
+        let (data, response) = try await URLSession.shared.data(from: url)
+        
+        guard let httpResponse = response as? HTTPURLResponse else {
+            throw MongoDBError.serverError(message: "Invalid response")
+        }
+        
+        if !(200...299).contains(httpResponse.statusCode) {
+            throw MongoDBError.serverError(message: "Failed with status code: \(httpResponse.statusCode)")
+        }
+        
+        let decoder = JSONDecoder()
+        return try decoder.decode([User].self, from: data)
+    }
+
+    func getCompatibleUsers() async throws -> [User] {
+        guard let userId = UserDefaults.standard.string(forKey: "userId") else {
+            throw MongoDBError.authError(message: "No user ID found")
+        }
+        
+        let url = URL(string: "\(baseURL)/api/users/compatible?userId=\(userId)")!
+        let (data, response) = try await URLSession.shared.data(from: url)
+        
+        guard let httpResponse = response as? HTTPURLResponse else {
+            throw MongoDBError.serverError(message: "Invalid response")
+        }
+        
+        if !(200...299).contains(httpResponse.statusCode) {
+            throw MongoDBError.serverError(message: "Failed with status code: \(httpResponse.statusCode)")
+        }
+        
+        let decoder = JSONDecoder()
+        return try decoder.decode([User].self, from: data)
+    }
 }
 
 enum MongoDBError: Error {
@@ -389,6 +434,7 @@ enum MongoDBError: Error {
     case gameAdditionFailed(Error)
     case loginFailed(message: String)
     case invalidResponse
+    case authError(message: String)
     
     var localizedDescription: String {
         switch self {
@@ -404,6 +450,8 @@ enum MongoDBError: Error {
             return "Login failed: \(message)"
         case .invalidResponse:
             return "Invalid response from server"
+        case .authError(let message):
+            return message
         }
     }
 } 

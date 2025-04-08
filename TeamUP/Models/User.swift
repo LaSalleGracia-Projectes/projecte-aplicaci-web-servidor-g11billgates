@@ -13,12 +13,12 @@ struct User: Identifiable, Decodable {
     
     enum CodingKeys: String, CodingKey {
         case id = "_id"
-        case name
-        case age
-        case gender
-        case description = "bio"
-        case games = "interests"
-        case profileImage
+        case name = "Nombre"
+        case age = "Edad"
+        case gender = "Genero"
+        case description = "Descripcion"
+        case games = "Juegos"
+        case profileImage = "FotoPerfil"
         case likes
         case matches
     }
@@ -46,8 +46,14 @@ struct User: Identifiable, Decodable {
         likes = try container.decodeIfPresent([String].self, forKey: .likes) ?? []
         matches = try container.decodeIfPresent([String].self, forKey: .matches) ?? []
         
-        // Decodificar los intereses como juegos
-        let interests = try container.decode([String].self, forKey: .games)
-        games = interests.map { ($0, "Sin rango") } // Asignamos "Sin rango" por defecto
+        // Decodificar los juegos con su estructura correcta
+        let gamesData = try container.decode([[String: String]].self, forKey: .games)
+        games = gamesData.compactMap { gameDict -> (String, String)? in
+            guard let nombre = gameDict["nombre"],
+                  let rango = gameDict["rango"] else {
+                return nil
+            }
+            return (nombre, rango)
+        }
     }
 } 

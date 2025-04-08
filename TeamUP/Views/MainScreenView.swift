@@ -6,6 +6,8 @@ struct MainScreenView: View {
     @State private var showDislikeOverlay = false
     @State private var showSettings = false
     @State private var selectedUser: User?
+    @State private var showMatchView = false
+    @State private var matchedUser: User?
     
     var body: some View {
         NavigationStack {
@@ -155,9 +157,9 @@ struct MainScreenView: View {
             .sheet(item: $selectedUser) { user in
                 UserDetailView(user: user)
             }
-            .fullScreenCover(isPresented: $viewModel.showMatch) {
-                if let matchedUser = viewModel.matchedUser {
-                    MatchView(matchedUser: matchedUser, isPresented: $viewModel.showMatch)
+            .fullScreenCover(isPresented: $showMatchView) {
+                if let matchedUser = matchedUser {
+                    MatchView(matchedUser: matchedUser, isShowing: $showMatchView)
                 }
             }
         }

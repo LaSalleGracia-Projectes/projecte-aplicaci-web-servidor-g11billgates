@@ -9,35 +9,28 @@ app.get('/api/users/compatible', async (req, res) => {
             return res.status(404).json({ error: 'Usuario no encontrado' });
         }
 
-        // Convertir rangos a números para comparación
-        const rankValues = {
-            'Hierro': 1, 'Bronce': 2, 'Plata': 3, 'Oro': 4, 
-            'Platino': 5, 'Diamante': 6, 'Maestro': 7, 'Gran Maestro': 8, 
-            'Desafiante': 9
-        };
-
         // Obtener los IDs de los juegos del usuario actual
-        const userGameIds = currentUser.juegos.map(game => game.juegoId.toString());
+        const userGameIds = currentUser.Juegos.map(game => game.nombre);
 
         // Construir la consulta para encontrar usuarios compatibles
         const query = {
             _id: { $ne: new ObjectId(userId) },
-            juegos: {
+            Juegos: {
                 $elemMatch: {
-                    juegoId: { $in: currentUser.juegos.map(game => new ObjectId(game.juegoId)) }
+                    nombre: { $in: userGameIds }
                 }
             }
         };
 
         // Buscar usuarios compatibles
         const compatibleUsers = await usuario.find(query)
-            .select('-password')
-            .sort({ 'juegos.rango': 1 }); // Ordenar por rango
+            .select('-Contraseña')
+            .sort({ 'Juegos.rango': 1 }); // Ordenar por rango
 
         // Filtrar usuarios para asegurar que tengan al menos un juego en común
         const filteredUsers = compatibleUsers.filter(user => {
-            const userGameIds = user.juegos.map(game => game.juegoId.toString());
-            return userGameIds.some(id => userGameIds.includes(id));
+            const userGames = user.Juegos.map(game => game.nombre);
+            return userGames.some(game => userGameIds.includes(game));
         });
 
         res.json(filteredUsers);
@@ -170,35 +163,35 @@ async function startServer() {
         // Crear usuarios decoy
         await createDecoyUsers();
 
-        // Validador existente para usuario
+        // Validador para usuario
         await database.command({
-          collMod: "usuario",
-          validator: {
-            $jsonSchema: {
-              bsonType: "object",
-              required: ["Nombre", "Correo", "Contraseña"],
-              properties: {
-                IDUsuario: { bsonType: ["int", "number"] },
-                Nombre: { bsonType: "string" },
-                Correo: { bsonType: "string" },
-                Contraseña: { bsonType: "string" },
-                FotoPerfil: { bsonType: ["string", "null"] },
-                Edad: { bsonType: ["int", "number", "null"] },
-                Region: { bsonType: ["string", "null"] },
-                bloqueado: { bsonType: "bool" },
-                likes: { 
-                  bsonType: "array",
-                  items: { bsonType: "objectId" }
-                },
-                matches: { 
-                  bsonType: "array",
-                  items: { bsonType: "objectId" }
+            collMod: "usuario",
+            validator: {
+                $jsonSchema: {
+                    bsonType: "object",
+                    required: ["Nombre", "Correo", "Contraseña"],
+                    properties: {
+                        IDUsuario: { bsonType: ["int", "number"] },
+                        Nombre: { bsonType: "string" },
+                        Correo: { bsonType: "string" },
+                        Contraseña: { bsonType: "string" },
+                        FotoPerfil: { bsonType: ["string", "null"] },
+                        Edad: { bsonType: ["int", "number", "null"] },
+                        Region: { bsonType: ["string", "null"] },
+                        bloqueado: { bsonType: "bool" },
+                        likes: { 
+                            bsonType: "array",
+                            items: { bsonType: ["int", "number"] }
+                        },
+                        matches: { 
+                            bsonType: "array",
+                            items: { bsonType: ["int", "number"] }
+                        }
+                    }
                 }
-              }
-            }
-          },
-          validationLevel: "moderate",
-          validationAction: "error"
+            },
+            validationLevel: "moderate",
+            validationAction: "error"
         });
 
         app.listen(PORT, () => {
@@ -209,41 +202,114 @@ async function startServer() {
     }
 }
 
-// Endpoint para dar like a un usuario
+// Middleware para validar token
+const validateToken = async (req, res, next) => {
+    try {
+        const token = req.headers.authorization?.split(' ')[1];
+        if (!token) {
+            return res.status(401).json({ error: 'Token no proporcionado' });
+        }
+        const decoded = jwt.verify(token, process.env.JWT_SECRET);
+        req.user = decoded;
+        next();
+    } catch (error) {
+        res.status(401).json({ error: 'Token inválido' });
+    }
+};
+
+// Endpoint mejorado para likes
 app.post('/api/users/:userId/like', async (req, res) => {
     try {
         const { userId } = req.params;
         const { likedUserId } = req.body;
-        
+
         const database = client.db(dbName);
         const usuarios = database.collection('usuario');
-        
-        // Añadir el like
-        await usuarios.updateOne(
-            { IDUsuario: Number(userId) },
-            { $addToSet: { likes: likedUserId } }
-        );
-        
-        // Verificar si hay match
-        const likedUser = await usuarios.findOne({ IDUsuario: Number(likedUserId) });
-        if (likedUser.likes && likedUser.likes.includes(userId)) {
-            // Hay match! Añadir a ambos usuarios a sus listas de matches
-            await usuarios.updateOne(
-                { IDUsuario: Number(userId) },
-                { $addToSet: { matches: likedUserId } }
-            );
+
+        // Validaciones básicas
+        if (userId === likedUserId) {
+            return res.status(400).json({ error: 'No puedes darte like a ti mismo' });
+        }
+
+        // Verificar que ambos usuarios existen
+        const [user, likedUser] = await Promise.all([
+            usuarios.findOne({ IDUsuario: Number(userId) }),
+            usuarios.findOne({ IDUsuario: Number(likedUserId) })
+        ]);
+
+        if (!user || !likedUser) {
+            return res.status(404).json({ error: 'Usuario no encontrado' });
+        }
+
+        // Inicializar arrays si no existen
+        if (!user.likes) user.likes = [];
+        if (!user.matches) user.matches = [];
+        if (!likedUser.likes) likedUser.likes = [];
+        if (!likedUser.matches) likedUser.matches = [];
+
+        // Verificar si ya existe un like previo
+        if (user.likes.includes(Number(likedUserId))) {
+            return res.status(400).json({ error: 'Ya has dado like a este usuario' });
+        }
+
+        // Verificar si ya hay match
+        if (user.matches.includes(Number(likedUserId))) {
+            return res.status(400).json({ error: 'Ya tienes un match con este usuario' });
+        }
+
+        // Verificar si el otro usuario ya dio like (esto crearía un match)
+        const isMatch = likedUser.likes.includes(Number(userId));
+
+        if (isMatch) {
+            // Crear match en una sola operación
+            await Promise.all([
+                usuarios.updateOne(
+                    { IDUsuario: Number(userId) },
+                    { 
+                        $push: { matches: Number(likedUserId) },
+                        $pull: { likes: Number(likedUserId) }
+                    }
+                ),
+                usuarios.updateOne(
+                    { IDUsuario: Number(likedUserId) },
+                    { 
+                        $push: { matches: Number(userId) },
+                        $pull: { likes: Number(userId) }
+                    }
+                )
+            ]);
+            
+            // Crear un nuevo chat para el match
+            const chat = await database.collection('chat').insertOne({
+                usuarios: [Number(userId), Number(likedUserId)],
+                mensajes: [],
+                createdAt: new Date()
+            });
+            
+            console.log(`Nuevo match entre ${user.Nombre} y ${likedUser.Nombre}`);
+        } else {
+            // Solo añadir el like
             await usuarios.updateOne(
                 { IDUsuario: Number(likedUserId) },
-                { $addToSet: { matches: userId } }
+                { $addToSet: { likes: Number(userId) } }
             );
-            
-            res.json({ match: true, message: '¡Match!' });
-        } else {
-            res.json({ match: false, message: 'Like enviado' });
         }
+
+        res.json({ 
+            isMatch,
+            matchedUser: isMatch ? {
+                id: likedUser.IDUsuario,
+                name: likedUser.Nombre,
+                profileImage: likedUser.FotoPerfil
+            } : null,
+            message: isMatch ? '¡Match! Ambos usuarios se han gustado' : 'Like enviado correctamente'
+        });
     } catch (error) {
-        console.error('Error en like:', error);
-        res.status(500).json({ error: 'Error al procesar el like' });
+        console.error('Error en el sistema de likes:', error);
+        res.status(500).json({ 
+            error: 'Error interno del servidor',
+            details: process.env.NODE_ENV === 'development' ? error.message : undefined
+        });
     }
 });
 

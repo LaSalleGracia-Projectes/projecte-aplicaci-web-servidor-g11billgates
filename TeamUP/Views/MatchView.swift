@@ -2,90 +2,120 @@ import SwiftUI
 
 struct MatchView: View {
     let matchedUser: User
-    @Binding var isPresented: Bool
-    @Environment(\.dismiss) var dismiss
+    @Binding var isShowing: Bool
     
     var body: some View {
         ZStack {
-            // Fondo con efecto de desenfoque
+            // Fondo semi-transparente
             Color.black.opacity(0.8)
-                .ignoresSafeArea()
+                .edgesIgnoringSafeArea(.all)
             
-            VStack(spacing: 30) {
-                // Texto de Match con animación
-                Text("¡MATCH!")
-                    .font(.system(size: 48, weight: .bold))
+            VStack(spacing: 20) {
+                // Título
+                Text("¡Es un Match!")
+                    .font(.system(size: 32, weight: .bold))
                     .foregroundColor(.white)
-                    .shadow(color: Color(red: 0.9, green: 0.3, blue: 0.2), radius: 10)
                 
-                // Imágenes de perfil con animación
+                // Imágenes de perfil
                 HStack(spacing: 20) {
-                    Image(matchedUser.profileImage)
-                        .resizable()
-                        .aspectRatio(contentMode: .fill)
-                        .frame(width: 120, height: 120)
-                        .clipShape(Circle())
-                        .overlay(Circle().stroke(Color.white, lineWidth: 4))
-                        .shadow(color: Color(red: 0.9, green: 0.3, blue: 0.2), radius: 10)
-                    
-                    Image(systemName: "heart.fill")
-                        .font(.system(size: 40))
-                        .foregroundColor(Color(red: 0.9, green: 0.3, blue: 0.2))
-                        .shadow(color: .white, radius: 10)
+                    if matchedUser.profileImage.starts(with: "http") {
+                        AsyncImage(url: URL(string: matchedUser.profileImage)) { image in
+                            image
+                                .resizable()
+                                .aspectRatio(contentMode: .fill)
+                                .frame(width: 120, height: 120)
+                                .clipShape(Circle())
+                        } placeholder: {
+                            Image(systemName: "person.circle.fill")
+                                .resizable()
+                                .frame(width: 120, height: 120)
+                                .foregroundColor(.gray)
+                        }
+                    } else {
+                        Image(matchedUser.profileImage)
+                            .resizable()
+                            .aspectRatio(contentMode: .fill)
+                            .frame(width: 120, height: 120)
+                            .clipShape(Circle())
+                    }
                 }
                 
-                // Mensaje personalizado
-                Text("¡Has hecho match con \(matchedUser.name)!")
-                    .font(.title2)
+                // Nombre del usuario
+                Text(matchedUser.name)
+                    .font(.system(size: 24, weight: .semibold))
                     .foregroundColor(.white)
-                    .multilineTextAlignment(.center)
-                    .padding(.horizontal)
                 
-                // Botones de acción
-                VStack(spacing: 15) {
-                    Button(action: {
-                        // Aquí iríamos al chat
-                        NotificationCenter.default.post(
-                            name: NSNotification.Name("NewChatAdded"),
-                            object: nil,
-                            userInfo: [
-                                "chat": ChatPreview(
-                                    id: UUID().uuidString,
-                                    username: matchedUser.name,
-                                    lastMessage: "¡Hola! ¡Hemos hecho match!",
-                                    timestamp: "Ahora",
-                                    profileImage: matchedUser.profileImage
-                                )
-                            ]
+                // Juegos en común
+                VStack(alignment: .leading, spacing: 8) {
+                    ForEach(matchedUser.games, id: \.0) { game in
+                        HStack {
+                            Text(game.0)
+                                .font(.system(size: 16, weight: .medium))
+                            Text("•")
+                                .foregroundColor(.gray)
+                            Text(game.1)
+                                .font(.system(size: 16))
+                                .foregroundColor(Color(red: 0.9, green: 0.3, blue: 0.2))
+                        }
+                        .padding(.horizontal, 16)
+                        .padding(.vertical, 8)
+                        .background(
+                            RoundedRectangle(cornerRadius: 12)
+                                .fill(Color(.systemGray6))
                         )
-                        isPresented = false
-                    }) {
-                        Text("Enviar mensaje")
-                            .font(.headline)
-                            .foregroundColor(.white)
-                            .frame(maxWidth: .infinity)
-                            .padding()
-                            .background(Color(red: 0.9, green: 0.3, blue: 0.2))
-                            .cornerRadius(15)
                     }
-                    
+                }
+                
+                // Botones
+                HStack(spacing: 20) {
                     Button(action: {
-                        isPresented = false
+                        isShowing = false
                     }) {
                         Text("Seguir buscando")
-                            .font(.headline)
+                            .font(.system(size: 18, weight: .semibold))
                             .foregroundColor(.white)
-                            .frame(maxWidth: .infinity)
-                            .padding()
-                            .background(Color.gray.opacity(0.3))
-                            .cornerRadius(15)
+                            .padding(.vertical, 12)
+                            .padding(.horizontal, 24)
+                            .background(Color(red: 0.9, green: 0.3, blue: 0.2))
+                            .cornerRadius(25)
+                    }
+                    
+                    NavigationLink(destination: ChatView(
+                        chatId: UUID().uuidString,
+                        userId: matchedUser.id,
+                        userAge: matchedUser.age
+                    )) {
+                        Text("Enviar mensaje")
+                            .font(.system(size: 18, weight: .semibold))
+                            .foregroundColor(.white)
+                            .padding(.vertical, 12)
+                            .padding(.horizontal, 24)
+                            .background(Color(red: 0.3, green: 0.8, blue: 0.4))
+                            .cornerRadius(25)
                     }
                 }
-                .padding(.horizontal, 40)
             }
+            .padding(32)
+            .background(Color(.systemBackground).opacity(0.9))
+            .cornerRadius(20)
+            .shadow(radius: 10)
         }
-        .onAppear {
-            // Aquí se podría añadir la lógica para guardar el match en la base de datos
-        }
+        .transition(.opacity)
+        .animation(.easeInOut, value: isShowing)
     }
+}
+
+#Preview {
+    MatchView(
+        matchedUser: User(
+            id: "1",
+            name: "Usuario Ejemplo",
+            age: 25,
+            gender: "Masculino",
+            description: "¡Hola! Me encanta jugar videojuegos competitivos.",
+            games: [("League of Legends", "Diamante"), ("Valorant", "Platino")],
+            profileImage: "person.circle.fill"
+        ),
+        isShowing: .constant(true)
+    )
 }
