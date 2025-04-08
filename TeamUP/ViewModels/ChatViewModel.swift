@@ -87,11 +87,11 @@ class ChatViewModel: NSObject, ObservableObject {
         }
         
         do {
-            let mediaURL = try await mediaService.uploadImage(image, forChat: chatId, userId: userId)
+            let mediaResponse = try await mediaService.uploadImage(image, forChat: chatId, userId: userId)
             let message = Message(
                 content: "Imagen",
                 type: .image,
-                mediaURL: mediaURL,
+                mediaURL: mediaResponse.url,
                 isFromCurrentUser: true,
                 timestamp: formatTimestamp()
             )
@@ -111,12 +111,12 @@ class ChatViewModel: NSObject, ObservableObject {
         }
         
         do {
-            let mediaURL = try await mediaService.uploadVideo(videoURL, forChat: chatId)
+            let mediaResponse = try await mediaService.uploadVideo(videoURL, forChat: chatId, userId: userId)
             let duration = try await mediaService.getMediaDuration(from: videoURL)
             let message = Message(
                 content: "Video",
                 type: .video,
-                mediaURL: mediaURL,
+                mediaURL: mediaResponse.url,
                 isFromCurrentUser: true,
                 timestamp: formatTimestamp(),
                 duration: duration
@@ -179,12 +179,12 @@ class ChatViewModel: NSObject, ObservableObject {
     private func sendVoiceMessage(_ url: URL) async {
         isLoading = true
         do {
-            let mediaURL = try await mediaService.uploadVoiceMessage(url, forChat: chatId)
+            let mediaResponse = try await mediaService.uploadVoiceMessage(url, forChat: chatId, userId: userId)
             let duration = try await mediaService.getMediaDuration(from: url)
             let newMessage = Message(
                 content: "Mensaje de voz",
                 type: .voice,
-                mediaURL: mediaURL,
+                mediaURL: mediaResponse.url,
                 isFromCurrentUser: true,
                 timestamp: formatTimestamp(),
                 duration: duration
@@ -204,6 +204,20 @@ class ChatViewModel: NSObject, ObservableObject {
         } catch {
             errorMessage = "Error al reproducir el mensaje de voz: \(error.localizedDescription)"
         }
+    }
+    
+    func stopAudio() {
+        audioPlayer?.stop()
+        audioPlayer = nil
+    }
+    
+    func cancelRecording() {
+        audioRecorder?.stop()
+        audioRecorder?.deleteRecording()
+        isRecording = false
+        recordingTimer?.invalidate()
+        recordingTimer = nil
+        audioURL = nil
     }
     
     private func getDocumentsDirectory() -> URL {

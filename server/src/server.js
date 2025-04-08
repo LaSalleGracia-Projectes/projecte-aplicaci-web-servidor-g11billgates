@@ -365,4 +365,163 @@ app.get('/api/users/compatible/:userId', async (req, res) => {
     }
 });
 
+// Configuración de directorios para archivos
+const uploadDir = path.join(__dirname, 'uploads');
+const profileImagesDir = path.join(uploadDir, 'profiles');
+const chatMediaDir = path.join(uploadDir, 'chat');
+const chatImagesDir = path.join(chatMediaDir, 'images');
+const chatVideosDir = path.join(chatMediaDir, 'videos');
+const chatAudioDir = path.join(chatMediaDir, 'audio');
+
+// Crear directorios si no existen
+[uploadDir, profileImagesDir, chatMediaDir, chatImagesDir, chatVideosDir, chatAudioDir].forEach(dir => {
+    if (!fs.existsSync(dir)) {
+        fs.mkdirSync(dir, { recursive: true });
+    }
+});
+
+// Configuración de multer para subida de archivos
+const storage = multer.diskStorage({
+    destination: function (req, file, cb) {
+        let uploadPath = uploadDir;
+        if (file.fieldname === 'profileImage') {
+            uploadPath = profileImagesDir;
+        } else if (file.fieldname === 'chatMedia') {
+            // Determinar el subdirectorio según el tipo de archivo
+            const fileType = file.mimetype.split('/')[0];
+            switch (fileType) {
+                case 'image':
+                    uploadPath = chatImagesDir;
+                    break;
+                case 'video':
+                    uploadPath = chatVideosDir;
+                    break;
+                case 'audio':
+                    uploadPath = chatAudioDir;
+                    break;
+                default:
+                    uploadPath = chatMediaDir;
+            }
+        }
+        cb(null, uploadPath);
+    },
+    filename: function (req, file, cb) {
+        const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1E9);
+        cb(null, file.fieldname + '-' + uniqueSuffix + path.extname(file.originalname));
+    }
+});
+
+// Endpoint para subir archivos multimedia al chat
+app.post('/upload-chat-media', upload.single('chatMedia'), async (req, res) => {
+    try {
+        if (!req.file) {
+            return res.status(400).json({ error: 'No se ha subido ningún archivo' });
+        }
+
+        const { chatId, userId } = req.body;
+        if (!chatId || !userId) {
+            return res.status(400).json({ error: 'Se requiere chatId y userId' });
+        }
+
+        const database = client.db(dbName);
+        const archivosMultimedia = database.collection('archivos_multimedia');
+        const mensajes = database.collection('mensaje');
+
+        // Determinar el tipo de archivo y su subdirectorio
+        const fileType = req.file.mimetype.split('/')[0];
+        let processedFilePath = req.file.path;
+        let duracion = null;
+        let fileUrl = '';
+
+        try {
+            // Procesar el archivo según su tipo
+            switch (fileType) {
+                case 'image':
+                    processedFilePath = path.join(chatImagesDir, 'processed-' + req.file.filename);
+                    await sharp(req.file.path)
+                        .resize(800, 800, { fit: 'inside' })
+                        .jpeg({ quality: 80 })
+                        .toFile(processedFilePath);
+                    fs.unlinkSync(req.file.path);
+                    fileUrl = `/uploads/chat/images/processed-${path.basename(req.file.filename)}`;
+                    break;
+
+                case 'video':
+                    processedFilePath = path.join(chatVideosDir, req.file.filename);
+                    fileUrl = `/uploads/chat/videos/${path.basename(req.file.filename)}`;
+                    // Obtener duración del video
+                    duracion = await new Promise((resolve, reject) => {
+                        ffmpeg.ffprobe(req.file.path, (err, metadata) => {
+                            if (err) reject(err);
+                            resolve(metadata.format.duration);
+                        });
+                    });
+                    break;
+
+                case 'audio':
+                    processedFilePath = path.join(chatAudioDir, req.file.filename);
+                    fileUrl = `/uploads/chat/audio/${path.basename(req.file.filename)}`;
+                    // Obtener duración del audio
+                    duracion = await new Promise((resolve, reject) => {
+                        ffmpeg.ffprobe(req.file.path, (err, metadata) => {
+                            if (err) reject(err);
+                            resolve(metadata.format.duration);
+                        });
+                    });
+                    break;
+
+                default:
+                    throw new Error('Tipo de archivo no soportado');
+            }
+
+            // Crear mensaje en la base de datos
+            const lastMessage = await mensajes.findOne({}, { sort: { IDMensaje: -1 } });
+            const IDMensaje = lastMessage ? (lastMessage.IDMensaje || 0) + 1 : 1;
+
+            const mensaje = {
+                IDMensaje: Number(IDMensaje),
+                IDChat: Number(chatId),
+                IDUsuario: Number(userId),
+                Tipo: fileType,
+                Contenido: fileUrl,
+                FechaEnvio: new Date(),
+                Duracion: duracion
+            };
+
+            await mensajes.insertOne(mensaje);
+
+            // Devolver respuesta con la URL completa
+            const baseUrl = process.env.BASE_URL || 'http://localhost:3000';
+            const fullUrl = `${baseUrl}${fileUrl}`;
+
+            res.json({
+                message: 'Archivo multimedia subido exitosamente',
+                data: {
+                    url: fullUrl,
+                    type: fileType,
+                    duration: duracion,
+                    messageId: IDMensaje
+                }
+            });
+
+        } catch (error) {
+            // Limpiar archivos en caso de error
+            if (fs.existsSync(req.file.path)) {
+                fs.unlinkSync(req.file.path);
+            }
+            if (fs.existsSync(processedFilePath)) {
+                fs.unlinkSync(processedFilePath);
+            }
+            throw error;
+        }
+
+    } catch (error) {
+        console.error('Error al subir archivo multimedia:', error);
+        res.status(500).json({ 
+            error: 'Error al procesar el archivo',
+            details: error.message
+        });
+    }
+});
+
 startServer(); 

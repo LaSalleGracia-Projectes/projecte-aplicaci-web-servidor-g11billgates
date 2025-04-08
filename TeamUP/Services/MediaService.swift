@@ -23,7 +23,7 @@ class MediaService {
     
     private init() {}
     
-    // MARK: - Validation
+    // MARK: - Validation Methods
     
     private func validateFileSize(at url: URL, maxSize: Int64) throws {
         let attributes = try FileManager.default.attributesOfItem(atPath: url.path)
@@ -32,16 +32,6 @@ class MediaService {
         if fileSize > maxSize {
             throw MediaError.fileTooLarge
         }
-    }
-    
-    private func validateImage(_ image: UIImage, userId: String) async throws {
-        let imageSize = image.jpegData(compressionQuality: 1.0)?.count ?? 0
-        if imageSize > maxImageSize {
-            throw MediaError.fileTooLarge
-        }
-        
-        // Verificar contenido inapropiado
-        try await checkInappropriateContent(image, userId: userId)
     }
     
     private func validateFileType(at url: URL, allowedTypes: [String]) throws {
@@ -57,6 +47,90 @@ class MediaService {
         if !isAllowed {
             throw MediaError.invalidFileType
         }
+    }
+    
+    // MARK: - Upload Methods
+    
+    private func uploadMedia(data: Data, filename: String, mimeType: String, chatId: String, userId: String) async throws -> MediaResponse {
+        let boundary = UUID().uuidString
+        var request = URLRequest(url: URL(string: "\(baseURL)/upload-chat-media")!)
+        request.httpMethod = "POST"
+        request.setValue("multipart/form-data; boundary=\(boundary)", forHTTPHeaderField: "Content-Type")
+        
+        var bodyData = Data()
+        
+        // Añadir chatId
+        bodyData.append("--\(boundary)\r\n".data(using: .utf8)!)
+        bodyData.append("Content-Disposition: form-data; name=\"chatId\"\r\n\r\n".data(using: .utf8)!)
+        bodyData.append("\(chatId)\r\n".data(using: .utf8)!)
+        
+        // Añadir userId
+        bodyData.append("--\(boundary)\r\n".data(using: .utf8)!)
+        bodyData.append("Content-Disposition: form-data; name=\"userId\"\r\n\r\n".data(using: .utf8)!)
+        bodyData.append("\(userId)\r\n".data(using: .utf8)!)
+        
+        // Añadir archivo
+        bodyData.append("--\(boundary)\r\n".data(using: .utf8)!)
+        bodyData.append("Content-Disposition: form-data; name=\"chatMedia\"; filename=\"\(filename)\"\r\n".data(using: .utf8)!)
+        bodyData.append("Content-Type: \(mimeType)\r\n\r\n".data(using: .utf8)!)
+        bodyData.append(data)
+        bodyData.append("\r\n".data(using: .utf8)!)
+        
+        bodyData.append("--\(boundary)--\r\n".data(using: .utf8)!)
+        request.httpBody = bodyData
+        
+        let (data, response) = try await URLSession.shared.data(for: request)
+        
+        guard let httpResponse = response as? HTTPURLResponse,
+              (200...299).contains(httpResponse.statusCode) else {
+            throw MediaError.uploadFailed
+        }
+        
+        let decoder = JSONDecoder()
+        let result = try decoder.decode(MediaUploadResponse.self, from: data)
+        return result.data
+    }
+    
+    func uploadImage(_ image: UIImage, forChat chatId: String, userId: String) async throws -> MediaResponse {
+        guard let imageData = image.jpegData(compressionQuality: 0.8) else {
+            throw MediaError.invalidImageData
+        }
+        
+        return try await uploadMedia(
+            data: imageData,
+            filename: "image.jpg",
+            mimeType: "image/jpeg",
+            chatId: chatId,
+            userId: userId
+        )
+    }
+    
+    func uploadVideo(_ videoURL: URL, forChat chatId: String, userId: String) async throws -> MediaResponse {
+        try validateFileSize(at: videoURL, maxSize: maxVideoSize)
+        try validateFileType(at: videoURL, allowedTypes: allowedVideoTypes)
+        
+        let videoData = try Data(contentsOf: videoURL)
+        return try await uploadMedia(
+            data: videoData,
+            filename: "video.mp4",
+            mimeType: "video/mp4",
+            chatId: chatId,
+            userId: userId
+        )
+    }
+    
+    func uploadVoiceMessage(_ audioURL: URL, forChat chatId: String, userId: String) async throws -> MediaResponse {
+        try validateFileSize(at: audioURL, maxSize: maxAudioSize)
+        try validateFileType(at: audioURL, allowedTypes: allowedAudioTypes)
+        
+        let audioData = try Data(contentsOf: audioURL)
+        return try await uploadMedia(
+            data: audioData,
+            filename: "voice.m4a",
+            mimeType: "audio/m4a",
+            chatId: chatId,
+            userId: userId
+        )
     }
     
     // MARK: - Content Analysis
@@ -94,155 +168,28 @@ class MediaService {
         }
     }
     
-    // MARK: - Public Methods
-    
-    func uploadImage(_ image: UIImage, forChat chatId: String, userId: String) async throws -> String {
-        try await validateImage(image, userId: userId)
-        
-        // Ajustar calidad de compresión según el tamaño
-        var compressionQuality: CGFloat = 0.7
-        var imageData = image.jpegData(compressionQuality: compressionQuality)
-        
-        // Reducir calidad si el archivo sigue siendo muy grande
-        while let data = imageData, data.count > maxImageSize && compressionQuality > 0.1 {
-            compressionQuality -= 0.1
-            imageData = image.jpegData(compressionQuality: compressionQuality)
-        }
-        
-        guard let finalImageData = imageData else {
-            throw MediaError.invalidImageData
-        }
-        
-        let boundary = UUID().uuidString
-        var request = URLRequest(url: URL(string: "\(baseURL)/upload-chat-media")!)
-        request.httpMethod = "POST"
-        request.setValue("multipart/form-data; boundary=\(boundary)", forHTTPHeaderField: "Content-Type")
-        
-        var bodyData = Data()
-        
-        // Añadir ID del chat
-        bodyData.append("--\(boundary)\r\n".data(using: .utf8)!)
-        bodyData.append("Content-Disposition: form-data; name=\"IDChat\"\r\n\r\n".data(using: .utf8)!)
-        bodyData.append("\(chatId)\r\n".data(using: .utf8)!)
-        
-        // Añadir datos de la imagen
-        bodyData.append("--\(boundary)\r\n".data(using: .utf8)!)
-        bodyData.append("Content-Disposition: form-data; name=\"chatMedia\"; filename=\"image.jpg\"\r\n".data(using: .utf8)!)
-        bodyData.append("Content-Type: image/jpeg\r\n\r\n".data(using: .utf8)!)
-        bodyData.append(finalImageData)
-        bodyData.append("\r\n".data(using: .utf8)!)
-        
-        bodyData.append("--\(boundary)--\r\n".data(using: .utf8)!)
-        request.httpBody = bodyData
-        
-        let (data, response) = try await URLSession.shared.data(for: request)
-        
-        guard let httpResponse = response as? HTTPURLResponse,
-              (200...299).contains(httpResponse.statusCode) else {
-            throw MediaError.uploadFailed
-        }
-        
-        let responseDict = try JSONSerialization.jsonObject(with: data) as? [String: [String: Any]]
-        guard let archivo = responseDict?["archivo"] as? [String: Any],
-              let mediaURL = archivo["URL"] as? String else {
-            throw MediaError.invalidResponse
-        }
-        
-        return mediaURL
-    }
-    
-    func uploadVideo(_ videoURL: URL, forChat chatId: String) async throws -> String {
-        try validateFileSize(at: videoURL, maxSize: maxVideoSize)
-        try validateFileType(at: videoURL, allowedTypes: allowedVideoTypes)
-        
-        let boundary = UUID().uuidString
-        var request = URLRequest(url: URL(string: "\(baseURL)/upload-chat-media")!)
-        request.httpMethod = "POST"
-        request.setValue("multipart/form-data; boundary=\(boundary)", forHTTPHeaderField: "Content-Type")
-        
-        var bodyData = Data()
-        
-        // Añadir ID del chat
-        bodyData.append("--\(boundary)\r\n".data(using: .utf8)!)
-        bodyData.append("Content-Disposition: form-data; name=\"IDChat\"\r\n\r\n".data(using: .utf8)!)
-        bodyData.append("\(chatId)\r\n".data(using: .utf8)!)
-        
-        // Añadir datos del video
-        let videoData = try Data(contentsOf: videoURL)
-        bodyData.append("--\(boundary)\r\n".data(using: .utf8)!)
-        bodyData.append("Content-Disposition: form-data; name=\"chatMedia\"; filename=\"video.mp4\"\r\n".data(using: .utf8)!)
-        bodyData.append("Content-Type: video/mp4\r\n\r\n".data(using: .utf8)!)
-        bodyData.append(videoData)
-        bodyData.append("\r\n".data(using: .utf8)!)
-        
-        bodyData.append("--\(boundary)--\r\n".data(using: .utf8)!)
-        request.httpBody = bodyData
-        
-        let (data, response) = try await URLSession.shared.data(for: request)
-        
-        guard let httpResponse = response as? HTTPURLResponse,
-              (200...299).contains(httpResponse.statusCode) else {
-            throw MediaError.uploadFailed
-        }
-        
-        let responseDict = try JSONSerialization.jsonObject(with: data) as? [String: [String: Any]]
-        guard let archivo = responseDict?["archivo"] as? [String: Any],
-              let mediaURL = archivo["URL"] as? String else {
-            throw MediaError.invalidResponse
-        }
-        
-        return mediaURL
-    }
-    
-    func uploadVoiceMessage(_ audioURL: URL, forChat chatId: String) async throws -> String {
-        try validateFileSize(at: audioURL, maxSize: maxAudioSize)
-        try validateFileType(at: audioURL, allowedTypes: allowedAudioTypes)
-        
-        let boundary = UUID().uuidString
-        var request = URLRequest(url: URL(string: "\(baseURL)/upload-chat-media")!)
-        request.httpMethod = "POST"
-        request.setValue("multipart/form-data; boundary=\(boundary)", forHTTPHeaderField: "Content-Type")
-        
-        var bodyData = Data()
-        
-        // Añadir ID del chat
-        bodyData.append("--\(boundary)\r\n".data(using: .utf8)!)
-        bodyData.append("Content-Disposition: form-data; name=\"IDChat\"\r\n\r\n".data(using: .utf8)!)
-        bodyData.append("\(chatId)\r\n".data(using: .utf8)!)
-        
-        // Añadir datos del mensaje de voz
-        let audioData = try Data(contentsOf: audioURL)
-        bodyData.append("--\(boundary)\r\n".data(using: .utf8)!)
-        bodyData.append("Content-Disposition: form-data; name=\"chatMedia\"; filename=\"voice.m4a\"\r\n".data(using: .utf8)!)
-        bodyData.append("Content-Type: audio/m4a\r\n\r\n".data(using: .utf8)!)
-        bodyData.append(audioData)
-        bodyData.append("\r\n".data(using: .utf8)!)
-        
-        bodyData.append("--\(boundary)--\r\n".data(using: .utf8)!)
-        request.httpBody = bodyData
-        
-        let (data, response) = try await URLSession.shared.data(for: request)
-        
-        guard let httpResponse = response as? HTTPURLResponse,
-              (200...299).contains(httpResponse.statusCode) else {
-            throw MediaError.uploadFailed
-        }
-        
-        let responseDict = try JSONSerialization.jsonObject(with: data) as? [String: [String: Any]]
-        guard let archivo = responseDict?["archivo"] as? [String: Any],
-              let mediaURL = archivo["URL"] as? String else {
-            throw MediaError.invalidResponse
-        }
-        
-        return mediaURL
-    }
-    
     func getMediaDuration(from url: URL) async throws -> Double {
         let asset = AVURLAsset(url: url)
         let duration = try await asset.load(.duration)
         return duration.seconds
     }
 }
+
+// MARK: - Models
+
+struct MediaUploadResponse: Codable {
+    let message: String
+    let data: MediaResponse
+}
+
+struct MediaResponse: Codable {
+    let url: String
+    let type: String
+    let duration: Double?
+    let messageId: Int
+}
+
+// MARK: - Errors
 
 enum MediaError: Error {
     case invalidImageData
