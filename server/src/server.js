@@ -16,7 +16,7 @@ app.get('/api/users/compatible', async (req, res) => {
             'Desafiante': 9
         };
 
-        // Obtener los juegos del usuario actual
+        // Obtener los IDs de los juegos del usuario actual
         const userGameIds = currentUser.juegos.map(game => game.juegoId.toString());
 
         // Construir la consulta para encontrar usuarios compatibles
@@ -24,14 +24,7 @@ app.get('/api/users/compatible', async (req, res) => {
             _id: { $ne: new ObjectId(userId) },
             juegos: {
                 $elemMatch: {
-                    juegoId: { $in: currentUser.juegos.map(game => new ObjectId(game.juegoId)) },
-                    rango: {
-                        $in: Object.entries(rankValues)
-                            .filter(([_, value]) => 
-                                Math.abs(value - rankValues[currentUser.juegos[0].rango]) <= 1
-                            )
-                            .map(([rank]) => rank)
-                    }
+                    juegoId: { $in: currentUser.juegos.map(game => new ObjectId(game.juegoId)) }
                 }
             }
         };
@@ -41,7 +34,13 @@ app.get('/api/users/compatible', async (req, res) => {
             .select('-password')
             .sort({ 'juegos.rango': 1 }); // Ordenar por rango
 
-        res.json(compatibleUsers);
+        // Filtrar usuarios para asegurar que tengan al menos un juego en común
+        const filteredUsers = compatibleUsers.filter(user => {
+            const userGameIds = user.juegos.map(game => game.juegoId.toString());
+            return userGameIds.some(id => userGameIds.includes(id));
+        });
+
+        res.json(filteredUsers);
     } catch (error) {
         console.error('Error al obtener usuarios compatibles:', error);
         res.status(500).json({ error: 'Error al obtener usuarios compatibles' });

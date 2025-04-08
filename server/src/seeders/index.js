@@ -119,20 +119,6 @@ async function seedUsuarios(database) {
 
         console.log(`Juegos encontrados: ${juegosExistentes.map(j => j.NombreJuego).join(', ')}`);
 
-        // Lista de rangos por juego
-        const rangosPorJuego = {
-            'League of Legends': ['Hierro', 'Bronce', 'Plata', 'Oro', 'Platino', 'Diamante', 'Maestro', 'Gran Maestro', 'Desafiante'],
-            'Valorant': ['Hierro', 'Bronce', 'Plata', 'Oro', 'Platino', 'Diamante', 'Ascendente', 'Inmortal', 'Radiante'],
-            'Counter-Strike 2': ['Plata I', 'Plata II', 'Plata III', 'Plata IV', 'Plata Elite', 'Plata Elite Master', 'Nova I', 'Nova II', 'Nova III', 'Nova Master', 'AK I', 'AK II', 'AK Cruz', 'Águila I', 'Águila II', 'Águila Master', 'Supremo', 'Global Elite'],
-            'Fortnite': ['Bronce', 'Plata', 'Oro', 'Platino', 'Diamante', 'Champion', 'Unreal'],
-            'Apex Legends': ['Bronce', 'Plata', 'Oro', 'Platino', 'Diamante', 'Maestro', 'Predator'],
-            'Call of Duty: Warzone': ['Bronce', 'Plata', 'Oro', 'Platino', 'Diamante', 'Crimson', 'Iridescent'],
-            'Dota 2': ['Herald', 'Guardian', 'Crusader', 'Archon', 'Legend', 'Ancient', 'Divine', 'Immortal'],
-            'Overwatch 2': ['Bronce', 'Plata', 'Oro', 'Platino', 'Diamante', 'Maestro', 'Gran Maestro', 'Top 500'],
-            'Rainbow Six Siege': ['Cobre', 'Bronce', 'Plata', 'Oro', 'Platino', 'Diamante', 'Champion'],
-            'Rocket League': ['Bronce', 'Plata', 'Oro', 'Platino', 'Diamante', 'Champion', 'Grand Champion', 'Supersonic Legend']
-        };
-
         // Nombres y descripciones para los usuarios decoy
         const decoyUsers = [
             { 
@@ -142,7 +128,11 @@ async function seedUsuarios(database) {
                 descripcion: 'Busco equipo para rankeds. Main ADC en LoL y Duelista en Valorant. Jugador competitivo con más de 5 años de experiencia. Disponible por las tardes y fines de semana.',
                 region: 'Europa',
                 idiomas: ['Español', 'Inglés'],
-                imagen: 'DwarfTestIcon'
+                imagen: 'DwarfTestIcon',
+                juegos: [
+                    { nombre: 'League of Legends', rango: 'Diamante' },
+                    { nombre: 'Valorant', rango: 'Inmortal' }
+                ]
             },
             { 
                 nombre: 'SarahPro', 
@@ -151,7 +141,11 @@ async function seedUsuarios(database) {
                 descripcion: 'Streamer y jugadora competitiva. Especialista en estrategia y análisis de juego. Más de 10k seguidores en Twitch. Busco equipo para torneos profesionales.',
                 region: 'América del Norte',
                 idiomas: ['Inglés', 'Español'],
-                imagen: 'ToadTestIcon'
+                imagen: 'ToadTestIcon',
+                juegos: [
+                    { nombre: 'Counter Strike', rango: 'Águila' },
+                    { nombre: 'Dota 2', rango: 'Inmortal' }
+                ]
             },
             { 
                 nombre: 'MikeTheTank', 
@@ -160,7 +154,11 @@ async function seedUsuarios(database) {
                 descripcion: 'Tank main en todos los juegos. Siempre protegiendo al equipo. Experiencia en torneos locales y regionales. Busco equipo para competir a nivel profesional.',
                 region: 'Europa',
                 idiomas: ['Español', 'Inglés', 'Francés'],
-                imagen: 'TerroristTestIcon'
+                imagen: 'TerroristTestIcon',
+                juegos: [
+                    { nombre: 'League of Legends', rango: 'Platino' },
+                    { nombre: 'Overwatch 2', rango: 'Diamante' }
+                ]
             },
             { 
                 nombre: 'LunaGaming', 
@@ -169,7 +167,11 @@ async function seedUsuarios(database) {
                 descripcion: 'Amante de los FPS. Alta precisión y buen trabajo en equipo. Jugadora profesional con experiencia en múltiples torneos. Disponible para prácticas diarias.',
                 region: 'Asia',
                 idiomas: ['Japonés', 'Inglés'],
-                imagen: 'CatTestIcon'
+                imagen: 'CatTestIcon',
+                juegos: [
+                    { nombre: 'Valorant', rango: 'Radiante' },
+                    { nombre: 'Counter Strike', rango: 'Global Elite' }
+                ]
             },
             { 
                 nombre: 'CarlosNinja', 
@@ -178,7 +180,11 @@ async function seedUsuarios(database) {
                 descripcion: 'Jugador versátil. Me adapto a cualquier rol y estrategia. Experiencia en coaching y análisis de partidas. Busco equipo para mejorar y competir.',
                 region: 'América Latina',
                 idiomas: ['Español', 'Portugués', 'Inglés'],
-                imagen: 'DogTestIcon'
+                imagen: 'DogTestIcon',
+                juegos: [
+                    { nombre: 'Fortnite', rango: 'Campeón' },
+                    { nombre: 'Apex Legends', rango: 'Predador' }
+                ]
             },
             { 
                 nombre: 'EmmaBuilder', 
@@ -187,7 +193,11 @@ async function seedUsuarios(database) {
                 descripcion: 'Especialista en construcción y edición en Fortnite. Busco duo para torneos. Ganadora de varios torneos locales. Disponible para prácticas intensivas.',
                 region: 'Europa',
                 idiomas: ['Inglés', 'Alemán'],
-                imagen: 'DwarfTestIcon'
+                imagen: 'DwarfTestIcon',
+                juegos: [
+                    { nombre: 'Fortnite', rango: 'Campeón' },
+                    { nombre: 'Call of Duty: Warzone', rango: 'Crimson' }
+                ]
             },
             { 
                 nombre: 'DavidSniper', 
@@ -196,7 +206,11 @@ async function seedUsuarios(database) {
                 descripcion: 'AWP main en CS2. Precisión y paciencia son mis puntos fuertes. Jugador profesional con experiencia en torneos internacionales. Busco equipo para ESL.',
                 region: 'Europa',
                 idiomas: ['Español', 'Inglés', 'Ruso'],
-                imagen: 'ToadTestIcon'
+                imagen: 'ToadTestIcon',
+                juegos: [
+                    { nombre: 'Counter Strike', rango: 'Global Elite' },
+                    { nombre: 'Rainbow Six Siege', rango: 'Diamante' }
+                ]
             },
             { 
                 nombre: 'SophiaSupport', 
@@ -205,7 +219,11 @@ async function seedUsuarios(database) {
                 descripcion: 'Support main en LoL. Me encanta ayudar al equipo a brillar. Experiencia en torneos universitarios y locales. Busco equipo para competir en ligas.',
                 region: 'América del Norte',
                 idiomas: ['Inglés', 'Español'],
-                imagen: 'TerroristTestIcon'
+                imagen: 'TerroristTestIcon',
+                juegos: [
+                    { nombre: 'League of Legends', rango: 'Maestro' },
+                    { nombre: 'Overwatch 2', rango: 'Maestro' }
+                ]
             },
             { 
                 nombre: 'LeoRush', 
@@ -214,7 +232,11 @@ async function seedUsuarios(database) {
                 descripcion: 'Jugador agresivo. Me especializo en early game y snowball. Jugador profesional con experiencia en múltiples juegos. Busco equipo para torneos.',
                 region: 'Asia',
                 idiomas: ['Coreano', 'Inglés'],
-                imagen: 'CatTestIcon'
+                imagen: 'CatTestIcon',
+                juegos: [
+                    { nombre: 'League of Legends', rango: 'Desafiante' },
+                    { nombre: 'Valorant', rango: 'Radiante' }
+                ]
             },
             { 
                 nombre: 'MiaTactics', 
@@ -223,7 +245,11 @@ async function seedUsuarios(database) {
                 descripcion: 'Estratega nata. Me gusta analizar y explotar las debilidades del rival. Experiencia en coaching y análisis de partidas. Busco equipo para competir.',
                 region: 'Europa',
                 idiomas: ['Inglés', 'Francés', 'Alemán'],
-                imagen: 'DogTestIcon'
+                imagen: 'DogTestIcon',
+                juegos: [
+                    { nombre: 'Dota 2', rango: 'Inmortal' },
+                    { nombre: 'Rainbow Six Siege', rango: 'Campeón' }
+                ]
             },
             { 
                 nombre: 'RyanFlex', 
@@ -232,7 +258,11 @@ async function seedUsuarios(database) {
                 descripcion: 'Jugador flexible. Puedo adaptarme a cualquier rol y situación. Experiencia en múltiples juegos y torneos. Busco equipo para competir a nivel profesional.',
                 region: 'América del Norte',
                 idiomas: ['Inglés', 'Español'],
-                imagen: 'DwarfTestIcon'
+                imagen: 'DwarfTestIcon',
+                juegos: [
+                    { nombre: 'Apex Legends', rango: 'Maestro' },
+                    { nombre: 'Rocket League', rango: 'Supersonic' }
+                ]
             },
             { 
                 nombre: 'ZoeCreative', 
@@ -241,69 +271,36 @@ async function seedUsuarios(database) {
                 descripcion: 'Jugadora creativa. Me especializo en estrategias poco convencionales. Experiencia en torneos y creación de contenido. Busco equipo para innovar y competir.',
                 region: 'Europa',
                 idiomas: ['Inglés', 'Español', 'Italiano'],
-                imagen: 'ToadTestIcon'
+                imagen: 'ToadTestIcon',
+                juegos: [
+                    { nombre: 'Call of Duty: Warzone', rango: 'Iridescente' },
+                    { nombre: 'Rocket League', rango: 'Grand Champ' }
+                ]
             }
         ];
 
-        // Crear cada usuario decoy
+        // Crear usuarios decoy
         for (const user of decoyUsers) {
-            try {
-                // Seleccionar 2-3 juegos aleatorios para cada usuario
-                const userGames = [];
-                const numGames = Math.floor(Math.random() * 2) + 2; // 2 o 3 juegos
-                const availableGames = [...juegosExistentes];
-                
-                for (let i = 0; i < numGames; i++) {
-                    const gameIndex = Math.floor(Math.random() * availableGames.length);
-                    const selectedGame = availableGames[gameIndex];
-                    availableGames.splice(gameIndex, 1); // Evitar duplicados
-                    
-                    const rangos = rangosPorJuego[selectedGame.NombreJuego];
-                    if (!rangos) {
-                        console.error(`No se encontraron rangos para el juego: ${selectedGame.NombreJuego}`);
-                        continue;
-                    }
-                    
-                    const rangoIndex = Math.floor(Math.random() * rangos.length);
-                    
-                    userGames.push({
-                        IDJuego: selectedGame._id,
-                        NombreJuego: selectedGame.NombreJuego,
-                        NivelElo: rangos[rangoIndex]
-                    });
-                }
+            const newUser = {
+                Nombre: user.nombre,
+                Correo: `${user.nombre.toLowerCase()}@example.com`,
+                Contraseña: await bcrypt.hash('password123', 10),
+                FotoPerfil: user.imagen,
+                Edad: user.edad,
+                Region: user.region,
+                Descripcion: user.descripcion,
+                Juegos: user.juegos,
+                Genero: user.genero,
+                Idiomas: user.idiomas
+            };
 
-                if (userGames.length === 0) {
-                    console.error(`No se pudieron asignar juegos al usuario ${user.nombre}`);
-                    continue;
-                }
-
-                // Crear el usuario decoy
-                const newUser = await usuariosCollection.insertOne({
-                    Nombre: user.nombre,
-                    Correo: `${user.nombre.toLowerCase()}@example.com`,
-                    Contraseña: await bcrypt.hash('decoy123', 10),
-                    Edad: user.edad,
-                    Genero: user.genero,
-                    Descripcion: user.descripcion,
-                    Juegos: userGames,
-                    FotoPerfil: user.imagen,
-                    Region: user.region,
-                    Idiomas: user.idiomas,
-                    bloqueado: false,
-                    IDUsuario: Math.floor(Math.random() * 1000000) // ID único para cada usuario
-                });
-
-                console.log(`Usuario decoy creado exitosamente: ${user.nombre}`);
-            } catch (error) {
-                console.error(`Error al crear usuario decoy ${user.nombre}:`, error);
-            }
+            await usuariosCollection.insertOne(newUser);
+            console.log(`Usuario decoy creado exitosamente: ${user.nombre}`);
         }
 
         console.log('Proceso de creación de usuarios decoy completado');
     } catch (error) {
-        console.error('Error general al crear usuarios decoy:', error);
-        throw error;
+        console.error('Error al crear usuarios decoy:', error);
     }
 }
 
