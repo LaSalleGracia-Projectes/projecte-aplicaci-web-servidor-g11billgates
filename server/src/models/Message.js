@@ -15,16 +15,31 @@ const messageSchema = new mongoose.Schema({
         type: String,
         default: ''
     },
-    image: {
+    tipo: {
+        type: String,
+        enum: ['texto', 'image', 'audio', 'video'],
+        default: 'texto'
+    },
+    mediaUrl: {
         type: String
+    },
+    mediaType: {
+        type: String
+    },
+    fileName: {
+        type: String
+    },
+    fileSize: {
+        type: Number
     },
     timestamp: {
         type: Date,
         default: Date.now
     },
-    read: {
-        type: Boolean,
-        default: false
+    estado: {
+        type: String,
+        enum: ['enviado', 'entregado', 'leido'],
+        default: 'enviado'
     }
 });
 

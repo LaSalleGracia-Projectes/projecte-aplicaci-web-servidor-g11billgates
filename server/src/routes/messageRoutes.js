@@ -10,25 +10,42 @@ const Chat = require('../models/Chat');
 // Configuración de multer para el almacenamiento de archivos
 const storage = multer.diskStorage({
     destination: function (req, file, cb) {
-        const dir = path.join(__dirname, '../../uploads/chat');
-        if (!fs.existsSync(dir)) {
-            fs.mkdirSync(dir, { recursive: true });
+        let uploadDir;
+        if (file.mimetype.startsWith('image/')) {
+            uploadDir = path.join(__dirname, '../../uploads/chat/images');
+        } else if (file.mimetype.startsWith('audio/')) {
+            uploadDir = path.join(__dirname, '../../uploads/chat/audio');
+        } else if (file.mimetype.startsWith('video/')) {
+            uploadDir = path.join(__dirname, '../../uploads/chat/video');
+        } else {
+            uploadDir = path.join(__dirname, '../../uploads/chat/other');
         }
-        cb(null, dir);
+        
+        if (!fs.existsSync(uploadDir)) {
+            fs.mkdirSync(uploadDir, { recursive: true });
+        }
+        cb(null, uploadDir);
     },
     filename: function (req, file, cb) {
-        const uniqueFileName = `${uuidv4()}${path.extname(file.originalname)}`;
+        const uniqueFileName = `${Date.now()}-${uuidv4()}${path.extname(file.originalname)}`;
         cb(null, uniqueFileName);
     }
 });
 
 // Filtro para tipos de archivos permitidos
 const fileFilter = (req, file, cb) => {
-    const allowedTypes = ['image/jpeg', 'image/png', 'image/gif'];
-    if (allowedTypes.includes(file.mimetype)) {
+    const allowedTypes = {
+        'image': ['image/jpeg', 'image/png', 'image/gif', 'image/webp'],
+        'audio': ['audio/mpeg', 'audio/wav', 'audio/ogg', 'audio/mp4', 'audio/webm'],
+        'video': ['video/mp4', 'video/webm', 'video/quicktime', 'video/x-msvideo']
+    };
+
+    const isAllowed = Object.values(allowedTypes).some(types => types.includes(file.mimetype));
+    
+    if (isAllowed) {
         cb(null, true);
     } else {
-        cb(new Error('Tipo de archivo no permitido. Solo se permiten imágenes (JPEG, PNG, GIF)'), false);
+        cb(new Error('Tipo de archivo no permitido. Solo se permiten imágenes (JPEG, PNG, GIF, WEBP), audios (MP3, WAV, OGG, MP4, WEBM) y videos (MP4, WEBM, MOV, AVI)'), false);
     }
 };
 
@@ -36,7 +53,7 @@ const upload = multer({
     storage: storage,
     fileFilter: fileFilter,
     limits: {
-        fileSize: 5 * 1024 * 1024 // 5MB máximo
+        fileSize: 50 * 1024 * 1024 // 50MB máximo para permitir videos
     }
 });
 
@@ -44,7 +61,7 @@ const upload = multer({
 const handleMulterError = (err, req, res, next) => {
     if (err instanceof multer.MulterError) {
         if (err.code === 'LIMIT_FILE_SIZE') {
-            return res.status(400).json({ message: 'El archivo es demasiado grande. Máximo 5MB.' });
+            return res.status(400).json({ message: 'El archivo es demasiado grande. Máximo 50MB.' });
         }
         return res.status(400).json({ message: 'Error al subir el archivo.' });
     } else if (err) {
@@ -53,8 +70,8 @@ const handleMulterError = (err, req, res, next) => {
     next();
 };
 
-// Enviar mensaje con o sin imagen
-router.post('/send', upload.single('image'), handleMulterError, async (req, res) => {
+// Enviar mensaje con o sin archivo multimedia
+router.post('/send', upload.single('file'), handleMulterError, async (req, res) => {
     try {
         const { chatId, senderId, text } = req.body;
         
@@ -68,13 +85,23 @@ router.post('/send', upload.single('image'), handleMulterError, async (req, res)
             senderId,
             text: text || '',
             timestamp: new Date(),
-            tipo: req.file ? 'imagen' : 'texto',
+            tipo: 'texto',
             estado: 'enviado'
         };
 
-        // Si hay una imagen, añadir la ruta al mensaje
+        // Si hay un archivo, determinar su tipo y añadir la ruta
         if (req.file) {
-            message.image = `/uploads/chat/${req.file.filename}`;
+            const fileType = req.file.mimetype.split('/')[0]; // 'image', 'audio' o 'video'
+            const relativePath = path.relative(
+                path.join(__dirname, '../../'),
+                req.file.path
+            );
+            
+            message.tipo = fileType;
+            message.mediaUrl = `/${relativePath}`;
+            message.mediaType = req.file.mimetype;
+            message.fileName = req.file.originalname;
+            message.fileSize = req.file.size;
         }
 
         // Guardar el mensaje en la base de datos
