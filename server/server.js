@@ -1016,6 +1016,169 @@ app.get('/users', async (req, res) => {
     }
 });
 
+// Endpoint para obtener el ELO de un usuario en un juego específico
+app.get('/api/elo/:userId/:gameId', async (req, res) => {
+    try {
+        const { userId, gameId } = req.params;
+        const database = client.db(dbName);
+        
+        const userGame = await database.collection('juegousuario').findOne({
+            IDUsuario: parseInt(userId),
+            IDJuego: parseInt(gameId)
+        });
+
+        if (!userGame) {
+            return res.status(404).json({ error: 'No se encontró el juego para este usuario' });
+        }
+
+        res.json({
+            elo: userGame.NivelElo,
+            gameId: gameId,
+            userId: userId
+        });
+    } catch (error) {
+        console.error('Error al obtener ELO:', error);
+        res.status(500).json({ error: 'Error al obtener ELO' });
+    }
+});
+
+// Endpoint para actualizar el ELO de un usuario
+app.put('/api/elo/update', async (req, res) => {
+    try {
+        const { userId, gameId, newElo } = req.body;
+        
+        if (!userId || !gameId || !newElo) {
+            return res.status(400).json({ error: 'Faltan parámetros requeridos' });
+        }
+
+        const database = client.db(dbName);
+        
+        const result = await database.collection('juegousuario').updateOne(
+            { 
+                IDUsuario: parseInt(userId), 
+                IDJuego: parseInt(gameId)
+            },
+            { 
+                $set: { NivelElo: parseInt(newElo) }
+            }
+        );
+
+        if (result.matchedCount === 0) {
+            return res.status(404).json({ error: 'No se encontró el registro para actualizar' });
+        }
+
+        // Actualizar el rango basado en el nuevo ELO
+        const rango = calcularRango(parseInt(newElo));
+        await database.collection('juegousuario').updateOne(
+            { 
+                IDUsuario: parseInt(userId), 
+                IDJuego: parseInt(gameId)
+            },
+            { 
+                $set: { Rango: rango }
+            }
+        );
+
+        res.json({
+            message: 'ELO actualizado correctamente',
+            newElo: newElo,
+            newRango: rango
+        });
+    } catch (error) {
+        console.error('Error al actualizar ELO:', error);
+        res.status(500).json({ error: 'Error al actualizar ELO' });
+    }
+});
+
+// Endpoint para calcular y actualizar ELO después de una partida
+app.post('/api/elo/match-result', async (req, res) => {
+    try {
+        const { player1Id, player2Id, gameId, winner, isDraw = false } = req.body;
+        
+        if (!player1Id || !player2Id || !gameId || (!isDraw && !winner)) {
+            return res.status(400).json({ error: 'Faltan parámetros requeridos' });
+        }
+
+        const database = client.db(dbName);
+        
+        // Obtener ELO actual de ambos jugadores
+        const player1Game = await database.collection('juegousuario').findOne({
+            IDUsuario: parseInt(player1Id),
+            IDJuego: parseInt(gameId)
+        });
+        
+        const player2Game = await database.collection('juegousuario').findOne({
+            IDUsuario: parseInt(player2Id),
+            IDJuego: parseInt(gameId)
+        });
+
+        if (!player1Game || !player2Game) {
+            return res.status(404).json({ error: 'No se encontraron los jugadores' });
+        }
+
+        // Calcular nuevos ELOs
+        const K = 32; // Factor K para el cálculo de ELO
+        const expectedScore1 = 1 / (1 + Math.pow(10, (player2Game.NivelElo - player1Game.NivelElo) / 400));
+        const expectedScore2 = 1 / (1 + Math.pow(10, (player1Game.NivelElo - player2Game.NivelElo) / 400));
+
+        let actualScore1, actualScore2;
+        if (isDraw) {
+            actualScore1 = actualScore2 = 0.5;
+        } else {
+            actualScore1 = winner === player1Id ? 1 : 0;
+            actualScore2 = winner === player2Id ? 1 : 0;
+        }
+
+        const newElo1 = Math.round(player1Game.NivelElo + K * (actualScore1 - expectedScore1));
+        const newElo2 = Math.round(player2Game.NivelElo + K * (actualScore2 - expectedScore2));
+
+        // Actualizar ELOs
+        await database.collection('juegousuario').updateOne(
+            { IDUsuario: parseInt(player1Id), IDJuego: parseInt(gameId) },
+            { $set: { 
+                NivelElo: newElo1,
+                Rango: calcularRango(newElo1)
+            }}
+        );
+
+        await database.collection('juegousuario').updateOne(
+            { IDUsuario: parseInt(player2Id), IDJuego: parseInt(gameId) },
+            { $set: { 
+                NivelElo: newElo2,
+                Rango: calcularRango(newElo2)
+            }}
+        );
+
+        res.json({
+            player1: {
+                id: player1Id,
+                oldElo: player1Game.NivelElo,
+                newElo: newElo1,
+                change: newElo1 - player1Game.NivelElo
+            },
+            player2: {
+                id: player2Id,
+                oldElo: player2Game.NivelElo,
+                newElo: newElo2,
+                change: newElo2 - player2Game.NivelElo
+            }
+        });
+    } catch (error) {
+        console.error('Error al procesar resultado de partida:', error);
+        res.status(500).json({ error: 'Error al procesar resultado de partida' });
+    }
+});
+
+// Función auxiliar para calcular el rango basado en ELO
+function calcularRango(elo) {
+    if (elo < 800) return 'Bronce';
+    if (elo < 1200) return 'Plata';
+    if (elo < 1600) return 'Oro';
+    if (elo < 2000) return 'Platino';
+    if (elo < 2400) return 'Diamante';
+    return 'Maestro';
+}
+
 // Manejo de errores global
 app.use((err, req, res, next) => {
     console.error(err.stack);
