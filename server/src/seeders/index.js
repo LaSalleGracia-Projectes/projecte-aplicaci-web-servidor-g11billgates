@@ -98,17 +98,13 @@ async function seedJuegos(database) {
 // Función para crear usuarios decoy
 async function seedUsuarios(database) {
     try {
-        console.log('Iniciando seed de usuarios decoy...');
+        console.log('Iniciando seed de usuarios...');
         
         const usuariosCollection = database.collection('usuario');
         const juegosCollection = database.collection('juego');
         
-        // Verificar si ya existen usuarios decoy
-        const existingDecoy = await usuariosCollection.findOne({ Correo: 'alexgamer@example.com' });
-        if (existingDecoy) {
-            console.log('Los usuarios decoy ya existen en la base de datos');
-            return;
-        }
+        // Eliminar usuarios existentes
+        await usuariosCollection.deleteMany({});
 
         // Obtener los juegos existentes
         const juegosExistentes = await juegosCollection.find({}).toArray();
@@ -117,190 +113,87 @@ async function seedUsuarios(database) {
             return;
         }
 
-        console.log(`Juegos encontrados: ${juegosExistentes.map(j => j.NombreJuego).join(', ')}`);
+        // Arrays para generar datos aleatorios
+        const nombres = ['Alex', 'Sarah', 'Mike', 'Luna', 'Carlos', 'Emma', 'David', 'Sophia', 'Leo', 'Mia', 
+                        'Jack', 'Ana', 'Pablo', 'Elena', 'Daniel', 'Laura', 'Mario', 'Julia', 'Victor', 'Isabel'];
+        const apellidos = ['García', 'Smith', 'Wang', 'Kumar', 'Silva', 'Müller', 'Dubois', 'Johnson', 'Kim', 'López',
+                          'Rossi', 'Brown', 'Chen', 'Patel', 'Santos', 'Weber', 'Martin', 'Lee', 'Popov', 'González'];
+        const generos = ['Masculino', 'Femenino', 'No binario'];
+        const regiones = ['Europa', 'América del Norte', 'América Latina', 'Asia', 'Oceanía'];
+        const idiomas = ['Español', 'Inglés', 'Francés', 'Alemán', 'Chino', 'Japonés', 'Coreano', 'Portugués', 'Ruso'];
+        const avatares = ['DwarfTestIcon', 'ToadTestIcon', 'TerroristTestIcon', 'CatTestIcon', 'DogTestIcon'];
+        const rangos = {
+            'League of Legends': ['Hierro', 'Bronce', 'Plata', 'Oro', 'Platino', 'Diamante', 'Maestro', 'Gran Maestro', 'Desafiante'],
+            'Valorant': ['Hierro', 'Bronce', 'Plata', 'Oro', 'Platino', 'Diamante', 'Ascendente', 'Inmortal', 'Radiante'],
+            'Counter-Strike 2': ['Plata 1', 'Plata Élite', 'Ak', 'Doble Ak', 'Águila', 'Águila Maestra', 'Supremo', 'Global Elite'],
+            'Fortnite': ['División 1', 'División 2', 'División 3', 'Contendiente', 'Campeón', 'Elite'],
+            'Apex Legends': ['Bronce', 'Plata', 'Oro', 'Platino', 'Diamante', 'Maestro', 'Predador'],
+            'Dota 2': ['Heraldo', 'Guardián', 'Cruzado', 'Arconte', 'Leyenda', 'Ancestral', 'Divino', 'Inmortal'],
+            'Overwatch 2': ['Bronce', 'Plata', 'Oro', 'Platino', 'Diamante', 'Maestro', 'Gran Maestro', 'Top 500'],
+            'Rainbow Six Siege': ['Cobre', 'Bronce', 'Plata', 'Oro', 'Platino', 'Diamante', 'Campeón'],
+            'Rocket League': ['Bronce', 'Plata', 'Oro', 'Platino', 'Diamante', 'Campeón', 'Gran Campeón', 'Supersónico']
+        };
 
-        // Nombres y descripciones para los usuarios decoy
-        const decoyUsers = [
-            { 
-                nombre: 'AlexGamer', 
-                edad: 22, 
-                genero: 'Masculino', 
-                descripcion: 'Busco equipo para rankeds. Main ADC en LoL y Duelista en Valorant. Jugador competitivo con más de 5 años de experiencia. Disponible por las tardes y fines de semana.',
-                region: 'Europa',
-                idiomas: ['Español', 'Inglés'],
-                imagen: 'DwarfTestIcon',
-                juegos: [
-                    { nombre: 'League of Legends', rango: 'Diamante' },
-                    { nombre: 'Valorant', rango: 'Inmortal' }
-                ]
-            },
-            { 
-                nombre: 'SarahPro', 
-                edad: 25, 
-                genero: 'Femenino', 
-                descripcion: 'Streamer y jugadora competitiva. Especialista en estrategia y análisis de juego. Más de 10k seguidores en Twitch. Busco equipo para torneos profesionales.',
-                region: 'América del Norte',
-                idiomas: ['Inglés', 'Español'],
-                imagen: 'ToadTestIcon',
-                juegos: [
-                    { nombre: 'Counter Strike', rango: 'Águila' },
-                    { nombre: 'Dota 2', rango: 'Inmortal' }
-                ]
-            },
-            { 
-                nombre: 'MikeTheTank', 
-                edad: 20, 
-                genero: 'Masculino', 
-                descripcion: 'Tank main en todos los juegos. Siempre protegiendo al equipo. Experiencia en torneos locales y regionales. Busco equipo para competir a nivel profesional.',
-                region: 'Europa',
-                idiomas: ['Español', 'Inglés', 'Francés'],
-                imagen: 'TerroristTestIcon',
-                juegos: [
-                    { nombre: 'League of Legends', rango: 'Platino' },
-                    { nombre: 'Overwatch 2', rango: 'Diamante' }
-                ]
-            },
-            { 
-                nombre: 'LunaGaming', 
-                edad: 23, 
-                genero: 'Femenino', 
-                descripcion: 'Amante de los FPS. Alta precisión y buen trabajo en equipo. Jugadora profesional con experiencia en múltiples torneos. Disponible para prácticas diarias.',
-                region: 'Asia',
-                idiomas: ['Japonés', 'Inglés'],
-                imagen: 'CatTestIcon',
-                juegos: [
-                    { nombre: 'Valorant', rango: 'Radiante' },
-                    { nombre: 'Counter Strike', rango: 'Global Elite' }
-                ]
-            },
-            { 
-                nombre: 'CarlosNinja', 
-                edad: 21, 
-                genero: 'Masculino', 
-                descripcion: 'Jugador versátil. Me adapto a cualquier rol y estrategia. Experiencia en coaching y análisis de partidas. Busco equipo para mejorar y competir.',
-                region: 'América Latina',
-                idiomas: ['Español', 'Portugués', 'Inglés'],
-                imagen: 'DogTestIcon',
-                juegos: [
-                    { nombre: 'Fortnite', rango: 'Campeón' },
-                    { nombre: 'Apex Legends', rango: 'Predador' }
-                ]
-            },
-            { 
-                nombre: 'EmmaBuilder', 
-                edad: 24, 
-                genero: 'Femenino', 
-                descripcion: 'Especialista en construcción y edición en Fortnite. Busco duo para torneos. Ganadora de varios torneos locales. Disponible para prácticas intensivas.',
-                region: 'Europa',
-                idiomas: ['Inglés', 'Alemán'],
-                imagen: 'DwarfTestIcon',
-                juegos: [
-                    { nombre: 'Fortnite', rango: 'Campeón' },
-                    { nombre: 'Call of Duty: Warzone', rango: 'Crimson' }
-                ]
-            },
-            { 
-                nombre: 'DavidSniper', 
-                edad: 22, 
-                genero: 'Masculino', 
-                descripcion: 'AWP main en CS2. Precisión y paciencia son mis puntos fuertes. Jugador profesional con experiencia en torneos internacionales. Busco equipo para ESL.',
-                region: 'Europa',
-                idiomas: ['Español', 'Inglés', 'Ruso'],
-                imagen: 'ToadTestIcon',
-                juegos: [
-                    { nombre: 'Counter Strike', rango: 'Global Elite' },
-                    { nombre: 'Rainbow Six Siege', rango: 'Diamante' }
-                ]
-            },
-            { 
-                nombre: 'SophiaSupport', 
-                edad: 25, 
-                genero: 'Femenino', 
-                descripcion: 'Support main en LoL. Me encanta ayudar al equipo a brillar. Experiencia en torneos universitarios y locales. Busco equipo para competir en ligas.',
-                region: 'América del Norte',
-                idiomas: ['Inglés', 'Español'],
-                imagen: 'TerroristTestIcon',
-                juegos: [
-                    { nombre: 'League of Legends', rango: 'Maestro' },
-                    { nombre: 'Overwatch 2', rango: 'Maestro' }
-                ]
-            },
-            { 
-                nombre: 'LeoRush', 
-                edad: 20, 
-                genero: 'Masculino', 
-                descripcion: 'Jugador agresivo. Me especializo en early game y snowball. Jugador profesional con experiencia en múltiples juegos. Busco equipo para torneos.',
-                region: 'Asia',
-                idiomas: ['Coreano', 'Inglés'],
-                imagen: 'CatTestIcon',
-                juegos: [
-                    { nombre: 'League of Legends', rango: 'Desafiante' },
-                    { nombre: 'Valorant', rango: 'Radiante' }
-                ]
-            },
-            { 
-                nombre: 'MiaTactics', 
-                edad: 23, 
-                genero: 'Femenino', 
-                descripcion: 'Estratega nata. Me gusta analizar y explotar las debilidades del rival. Experiencia en coaching y análisis de partidas. Busco equipo para competir.',
-                region: 'Europa',
-                idiomas: ['Inglés', 'Francés', 'Alemán'],
-                imagen: 'DogTestIcon',
-                juegos: [
-                    { nombre: 'Dota 2', rango: 'Inmortal' },
-                    { nombre: 'Rainbow Six Siege', rango: 'Campeón' }
-                ]
-            },
-            { 
-                nombre: 'RyanFlex', 
-                edad: 21, 
-                genero: 'Masculino', 
-                descripcion: 'Jugador flexible. Puedo adaptarme a cualquier rol y situación. Experiencia en múltiples juegos y torneos. Busco equipo para competir a nivel profesional.',
-                region: 'América del Norte',
-                idiomas: ['Inglés', 'Español'],
-                imagen: 'DwarfTestIcon',
-                juegos: [
-                    { nombre: 'Apex Legends', rango: 'Maestro' },
-                    { nombre: 'Rocket League', rango: 'Supersonic' }
-                ]
-            },
-            { 
-                nombre: 'ZoeCreative', 
-                edad: 24, 
-                genero: 'Femenino', 
-                descripcion: 'Jugadora creativa. Me especializo en estrategias poco convencionales. Experiencia en torneos y creación de contenido. Busco equipo para innovar y competir.',
-                region: 'Europa',
-                idiomas: ['Inglés', 'Español', 'Italiano'],
-                imagen: 'ToadTestIcon',
-                juegos: [
-                    { nombre: 'Call of Duty: Warzone', rango: 'Iridescente' },
-                    { nombre: 'Rocket League', rango: 'Grand Champ' }
-                ]
+        const usuarios = [];
+        const hashedPassword = await bcrypt.hash('password123', 10); // Contraseña común para todos los usuarios de prueba
+
+        for (let i = 0; i < 20; i++) {
+            // Seleccionar 2-3 juegos aleatorios para cada usuario
+            const numJuegos = Math.floor(Math.random() * 2) + 2; // 2 o 3 juegos
+            const juegosUsuario = [];
+            const juegosDisponibles = [...juegosExistentes];
+            
+            for (let j = 0; j < numJuegos; j++) {
+                const randomIndex = Math.floor(Math.random() * juegosDisponibles.length);
+                const juego = juegosDisponibles.splice(randomIndex, 1)[0];
+                const rangosJuego = rangos[juego.NombreJuego] || ['Principiante', 'Intermedio', 'Avanzado'];
+                const rangoAleatorio = rangosJuego[Math.floor(Math.random() * rangosJuego.length)];
+                
+                juegosUsuario.push({
+                    nombre: juego.NombreJuego,
+                    rango: rangoAleatorio
+                });
             }
-        ];
 
-        // Crear usuarios decoy
-        for (const user of decoyUsers) {
-            const newUser = {
-                Nombre: user.nombre,
-                Correo: `${user.nombre.toLowerCase()}@example.com`,
-                Contraseña: await bcrypt.hash('password123', 10),
-                FotoPerfil: user.imagen,
-                Edad: user.edad,
-                Region: user.region,
-                Descripcion: user.descripcion,
-                Juegos: user.juegos,
-                Genero: user.genero,
-                Idiomas: user.idiomas
+            // Generar 2-3 idiomas aleatorios
+            const numIdiomas = Math.floor(Math.random() * 2) + 2;
+            const idiomasUsuario = [];
+            const idiomasDisponibles = [...idiomas];
+            for (let k = 0; k < numIdiomas; k++) {
+                const randomIndex = Math.floor(Math.random() * idiomasDisponibles.length);
+                idiomasUsuario.push(idiomasDisponibles.splice(randomIndex, 1)[0]);
+            }
+
+            const usuario = {
+                IDUsuario: i + 1,
+                Nombre: nombres[i],
+                Apellido: apellidos[i],
+                NombreUsuario: `${nombres[i].toLowerCase()}${Math.floor(Math.random() * 1000)}`,
+                Correo: `${nombres[i].toLowerCase()}${Math.floor(Math.random() * 1000)}@example.com`,
+                Contraseña: hashedPassword,
+                Edad: Math.floor(Math.random() * 12) + 18, // Edad entre 18 y 30
+                Genero: generos[Math.floor(Math.random() * generos.length)],
+                Region: regiones[Math.floor(Math.random() * regiones.length)],
+                Descripcion: `¡Hola! Soy ${nombres[i]}, jugador${generos[Math.floor(Math.random() * generos.length)] === 'Femenino' ? 'a' : ''} de ${juegosUsuario.map(j => j.nombre).join(' y ')}. Busco equipo para mejorar y competir.`,
+                Idiomas: idiomasUsuario,
+                FotoPerfil: avatares[Math.floor(Math.random() * avatares.length)],
+                Juegos: juegosUsuario,
+                FechaRegistro: new Date(Date.now() - Math.floor(Math.random() * 90) * 24 * 60 * 60 * 1000), // Últimos 90 días
+                UltimaConexion: new Date(),
+                Estado: 'Activo'
             };
 
-            await usuariosCollection.insertOne(newUser);
-            console.log(`Usuario decoy creado exitosamente: ${user.nombre}`);
+            usuarios.push(usuario);
         }
 
-        console.log('Proceso de creación de usuarios decoy completado');
+        // Insertar los usuarios
+        const result = await usuariosCollection.insertMany(usuarios);
+        console.log(`${result.insertedCount} usuarios creados`);
+        
+        return result.insertedIds;
     } catch (error) {
-        console.error('Error al crear usuarios decoy:', error);
+        console.error('Error al crear usuarios:', error);
+        throw error;
     }
 }
 
