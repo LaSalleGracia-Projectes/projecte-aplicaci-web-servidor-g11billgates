@@ -13,6 +13,7 @@ const ffmpeg = require('fluent-ffmpeg');
 const ffmpegInstaller = require('@ffmpeg-installer/ffmpeg');
 const authRoutes = require('./src/routes/auth');
 const testAuthRoutes = require('./src/routes/testAuth');
+const messageRoutes = require('./src/routes/messageRoutes');
 const session = require('express-session');
 const { passport: steamPassport } = require('./src/steamAuth');
 const { passport: appleAmazonPassport } = require('./src/appleAmazonAuth');
@@ -88,9 +89,14 @@ const upload = multer({
 // Middleware
 app.use(cors());
 app.use(express.json());
-app.use('/uploads', express.static(uploadDir));
+
+// Servir archivos estáticos
+app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
+
+// Rutas
 app.use('/api/auth', authRoutes);
 app.use('/api/test', testAuthRoutes);
+app.use('/api/messages', messageRoutes);
 
 // Configuración de sesiones
 app.use(session({
@@ -188,23 +194,24 @@ async function configurarValidacion(database) {
       validator: {
         $jsonSchema: {
           bsonType: "object",
-          required: ["IDMensaje", "IDChat", "IDUsuario", "Tipo", "FechaEnvio"],
+          required: ["IDChat", "IDUsuario", "Tipo", "FechaEnvio"],
           properties: {
-            IDMensaje: { bsonType: ["int", "number"] },
-            IDChat: { bsonType: ["int", "number"] },
-            IDUsuario: { bsonType: ["int", "number"] },
+            IDChat: { bsonType: ["objectId", "string"] },
+            IDUsuario: { bsonType: ["objectId", "string"] },
             Tipo: { 
               bsonType: "string",
               enum: ["texto", "imagen", "video", "audio"]
             },
             Contenido: { bsonType: "string" },
+            RutaArchivo: { bsonType: "string" },
             FechaEnvio: { bsonType: "date" },
-            IDArchivo: { bsonType: ["int", "number", "null"] }
+            Estado: {
+              bsonType: "string",
+              enum: ["enviado", "entregado", "leido"]
+            }
           }
         }
-      },
-      validationLevel: "moderate",
-      validationAction: "error"
+      }
     });
     console.log('Validador de mensaje configurado con éxito');
 
@@ -1007,6 +1014,15 @@ app.get('/users', async (req, res) => {
             details: error.message
         });
     }
+});
+
+// Manejo de errores global
+app.use((err, req, res, next) => {
+    console.error(err.stack);
+    res.status(500).json({ 
+        message: 'Error interno del servidor',
+        error: process.env.NODE_ENV === 'development' ? err.message : undefined
+    });
 });
 
 // Start server
