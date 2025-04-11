@@ -21,6 +21,7 @@ const { runSeeders } = require('./src/seeders');
 const axios = require('axios');
 const mongoose = require('mongoose');
 const Usuario = require('./src/models/usuario');
+const Match = require('./src/models/match');
 
 ffmpeg.setFfmpegPath(ffmpegInstaller.path);
 
@@ -1348,6 +1349,182 @@ app.post('/api/elo/match-result', authenticateToken, limiter, async (req, res) =
     } catch (error) {
         console.error('Error al registrar resultado de partida:', error);
         res.status(500).json({ error: 'Error interno del servidor' });
+    }
+});
+
+// Función para calcular la compatibilidad entre usuarios basada en ELO
+async function calcularCompatibilidad(usuario1Id, usuario2Id, juegoId) {
+    try {
+        const usuario1 = await Usuario.findById(usuario1Id);
+        const usuario2 = await Usuario.findById(usuario2Id);
+
+        if (!usuario1 || !usuario2) {
+            throw new Error('Usuarios no encontrados');
+        }
+
+        const elo1 = usuario1.elo.find(e => e.gameId.toString() === juegoId.toString())?.elo || 1000;
+        const elo2 = usuario2.elo.find(e => e.gameId.toString() === juegoId.toString())?.elo || 1000;
+
+        // Diferencia máxima de ELO permitida (ajustable)
+        const maxDiferenciaElo = 200;
+        const diferenciaElo = Math.abs(elo1 - elo2);
+
+        return {
+            compatible: diferenciaElo <= maxDiferenciaElo,
+            diferenciaElo,
+            elo1,
+            elo2
+        };
+    } catch (error) {
+        console.error('Error al calcular compatibilidad:', error);
+        throw error;
+    }
+}
+
+// Función para buscar usuarios compatibles
+async function buscarUsuariosCompatibles(usuarioId, juegoId) {
+    try {
+        const usuario = await Usuario.findById(usuarioId);
+        if (!usuario) {
+            throw new Error('Usuario no encontrado');
+        }
+
+        // Obtener el ELO del usuario para el juego específico
+        const eloUsuario = usuario.elo.find(e => e.gameId.toString() === juegoId.toString())?.elo || 1000;
+
+        // Buscar usuarios con ELO similar
+        const usuariosCompatibles = await Usuario.find({
+            _id: { $ne: usuarioId },
+            'elo.gameId': juegoId,
+            $or: [
+                { 'elo.elo': { $gte: eloUsuario - 200, $lte: eloUsuario + 200 } }
+            ]
+        }).limit(10);
+
+        return usuariosCompatibles;
+    } catch (error) {
+        console.error('Error al buscar usuarios compatibles:', error);
+        throw error;
+    }
+}
+
+// Endpoint para buscar matches
+app.get('/api/matches/buscar', authenticateToken, async (req, res) => {
+    try {
+        const { juegoId } = req.query;
+        if (!juegoId) {
+            return res.status(400).json({ error: 'ID de juego requerido' });
+        }
+
+        const usuariosCompatibles = await buscarUsuariosCompatibles(req.usuario.id, juegoId);
+        res.json(usuariosCompatibles);
+    } catch (error) {
+        res.status(500).json({ error: error.message });
+    }
+});
+
+// Endpoint para crear un match
+app.post('/api/matches/crear', authenticateToken, async (req, res) => {
+    try {
+        const { usuario2Id, juegoId } = req.body;
+        if (!usuario2Id || !juegoId) {
+            return res.status(400).json({ error: 'Usuario2 ID y Juego ID son requeridos' });
+        }
+
+        // Verificar compatibilidad
+        const compatibilidad = await calcularCompatibilidad(req.usuario.id, usuario2Id, juegoId);
+        if (!compatibilidad.compatible) {
+            return res.status(400).json({ 
+                error: 'Usuarios no compatibles',
+                diferenciaElo: compatibilidad.diferenciaElo
+            });
+        }
+
+        // Crear el match
+        const match = new Match({
+            usuario1: req.usuario.id,
+            usuario2: usuario2Id,
+            juego: juegoId,
+            estado: 'pendiente'
+        });
+
+        await match.save();
+        res.status(201).json(match);
+    } catch (error) {
+        res.status(500).json({ error: error.message });
+    }
+});
+
+// Endpoint para actualizar el estado de un match
+app.put('/api/matches/:matchId/estado', authenticateToken, async (req, res) => {
+    try {
+        const { matchId } = req.params;
+        const { estado } = req.body;
+
+        if (!['aceptado', 'rechazado'].includes(estado)) {
+            return res.status(400).json({ error: 'Estado inválido' });
+        }
+
+        const match = await Match.findById(matchId);
+        if (!match) {
+            return res.status(404).json({ error: 'Match no encontrado' });
+        }
+
+        // Verificar que el usuario es parte del match
+        if (match.usuario1.toString() !== req.usuario.id && 
+            match.usuario2.toString() !== req.usuario.id) {
+            return res.status(403).json({ error: 'No autorizado' });
+        }
+
+        match.estado = estado;
+        match.fechaActualizacion = new Date();
+        await match.save();
+
+        res.json(match);
+    } catch (error) {
+        res.status(500).json({ error: error.message });
+    }
+});
+
+// Endpoint para registrar el resultado de un match
+app.put('/api/matches/:matchId/resultado', authenticateToken, async (req, res) => {
+    try {
+        const { matchId } = req.params;
+        const { ganadorId, puntuacionUsuario1, puntuacionUsuario2 } = req.body;
+
+        const match = await Match.findById(matchId);
+        if (!match) {
+            return res.status(404).json({ error: 'Match no encontrado' });
+        }
+
+        // Verificar que el match está aceptado
+        if (match.estado !== 'aceptado') {
+            return res.status(400).json({ error: 'El match no está aceptado' });
+        }
+
+        // Verificar que el usuario es parte del match
+        if (match.usuario1.toString() !== req.usuario.id && 
+            match.usuario2.toString() !== req.usuario.id) {
+            return res.status(403).json({ error: 'No autorizado' });
+        }
+
+        // Actualizar el resultado
+        match.resultado = {
+            ganador: ganadorId,
+            puntuacionUsuario1,
+            puntuacionUsuario2
+        };
+        match.estado = 'completado';
+        match.fechaActualizacion = new Date();
+
+        // Calcular y actualizar ELO
+        const resultado = ganadorId === match.usuario1.toString() ? 1 : 0;
+        await calcularElo(match.usuario1, match.usuario2, match.juego, resultado);
+
+        await match.save();
+        res.json(match);
+    } catch (error) {
+        res.status(500).json({ error: error.message });
     }
 });
 
