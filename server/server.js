@@ -18,6 +18,7 @@ const session = require('express-session');
 const { passport: steamPassport } = require('./src/steamAuth');
 const { passport: appleAmazonPassport } = require('./src/appleAmazonAuth');
 const { runSeeders } = require('./src/seeders');
+const axios = require('axios');
 
 ffmpeg.setFfmpegPath(ffmpegInstaller.path);
 
@@ -116,6 +117,36 @@ app.use(appleAmazonPassport.session());
 
 // MongoDB client
 const client = new MongoClient(uri);
+
+// Middleware de autenticación
+const authenticateToken = (req, res, next) => {
+    const authHeader = req.headers['authorization'];
+    const token = authHeader && authHeader.split(' ')[1];
+
+    if (!token) {
+        return res.status(401).json({ error: 'Se requiere autenticación' });
+    }
+
+    jwt.verify(token, process.env.JWT_SECRET || 'your-secret-key', (err, user) => {
+        if (err) {
+            return res.status(403).json({ error: 'Token inválido' });
+        }
+        req.user = user;
+        next();
+    });
+};
+
+// Rate limiting middleware
+const rateLimit = require('express-rate-limit');
+const eloLimiter = rateLimit({
+    windowMs: 15 * 60 * 1000, // 15 minutos
+    max: 100 // límite de 100 solicitudes por ventana
+});
+
+// Validación de ELO
+function validarElo(elo) {
+    return Number.isInteger(elo) && elo >= 0 && elo <= 3000;
+}
 
 // Database initialization functions
 async function crearColecciones(database) {
@@ -490,6 +521,60 @@ async function buscarPosiblesMatches(database, idUsuario, idJuego) {
         }
       }
     ]).toArray();
+}
+
+// Configuración de la API de FACEIT
+const FACEIT_API_KEY = process.env.FACEIT_API_KEY;
+const FACEIT_API_URL = 'https://open.faceit.com/data/v4';
+
+// Cliente de FACEIT API
+const faceitClient = axios.create({
+    baseURL: FACEIT_API_URL,
+    headers: {
+        'Authorization': `Bearer ${FACEIT_API_KEY}`,
+        'Content-Type': 'application/json'
+    }
+});
+
+// Función para obtener datos de FACEIT
+async function getFaceitPlayerStats(gameId, playerId) {
+    try {
+        const response = await faceitClient.get(`/players/${playerId}/stats/${gameId}`);
+        return response.data;
+    } catch (error) {
+        console.error('Error getting FACEIT stats:', error);
+        return null;
+    }
+}
+
+// Función para sincronizar ELO con FACEIT
+async function syncFaceitElo(userId, gameId) {
+    try {
+        const faceitStats = await getFaceitPlayerStats(gameId, userId);
+        if (!faceitStats) return null;
+
+        const database = client.db(dbName);
+        const elo = faceitStats.lifetime.average_elo || 1200; // ELO por defecto si no hay datos
+
+        await database.collection('juegousuario').updateOne(
+            { 
+                IDUsuario: parseInt(userId), 
+                IDJuego: parseInt(gameId)
+            },
+            { 
+                $set: { 
+                    NivelElo: elo,
+                    Rango: calcularRango(elo),
+                    UltimaSincFaceit: new Date()
+                }
+            }
+        );
+
+        return elo;
+    } catch (error) {
+        console.error('Error syncing FACEIT ELO:', error);
+        return null;
+    }
 }
 
 // Login endpoint
@@ -1017,7 +1102,7 @@ app.get('/users', async (req, res) => {
 });
 
 // Endpoint para obtener el ELO de un usuario en un juego específico
-app.get('/api/elo/:userId/:gameId', async (req, res) => {
+app.get('/api/elo/:userId/:gameId', authenticateToken, eloLimiter, async (req, res) => {
     try {
         const { userId, gameId } = req.params;
         const database = client.db(dbName);
@@ -1031,10 +1116,24 @@ app.get('/api/elo/:userId/:gameId', async (req, res) => {
             return res.status(404).json({ error: 'No se encontró el juego para este usuario' });
         }
 
+        // Intentar sincronizar con FACEIT si han pasado más de 24 horas
+        const ultimaSync = userGame.UltimaSincFaceit || new Date(0);
+        const horasDesdeSync = (new Date() - ultimaSync) / (1000 * 60 * 60);
+
+        let elo = userGame.NivelElo;
+        if (horasDesdeSync > 24) {
+            const faceitElo = await syncFaceitElo(userId, gameId);
+            if (faceitElo) {
+                elo = faceitElo;
+            }
+        }
+
         res.json({
-            elo: userGame.NivelElo,
+            elo: elo,
             gameId: gameId,
-            userId: userId
+            userId: userId,
+            rango: calcularRango(elo),
+            ultimaSincronizacion: userGame.UltimaSincFaceit
         });
     } catch (error) {
         console.error('Error al obtener ELO:', error);
@@ -1043,7 +1142,7 @@ app.get('/api/elo/:userId/:gameId', async (req, res) => {
 });
 
 // Endpoint para actualizar el ELO de un usuario
-app.put('/api/elo/update', async (req, res) => {
+app.put('/api/elo/update', authenticateToken, eloLimiter, async (req, res) => {
     try {
         const { userId, gameId, newElo } = req.body;
         
@@ -1051,15 +1150,35 @@ app.put('/api/elo/update', async (req, res) => {
             return res.status(400).json({ error: 'Faltan parámetros requeridos' });
         }
 
+        if (!validarElo(newElo)) {
+            return res.status(400).json({ error: 'ELO inválido. Debe ser un número entre 0 y 3000' });
+        }
+
+        // Verificar datos de FACEIT antes de actualizar
+        const faceitStats = await getFaceitPlayerStats(gameId, userId);
+        if (faceitStats) {
+            const faceitElo = faceitStats.lifetime.average_elo || 1200;
+            // Permitir una diferencia máxima de 300 puntos con FACEIT
+            if (Math.abs(newElo - faceitElo) > 300) {
+                return res.status(400).json({ 
+                    error: 'El ELO propuesto difiere demasiado del ELO de FACEIT',
+                    faceitElo: faceitElo
+                });
+            }
+        }
+
         const database = client.db(dbName);
-        
         const result = await database.collection('juegousuario').updateOne(
             { 
                 IDUsuario: parseInt(userId), 
                 IDJuego: parseInt(gameId)
             },
             { 
-                $set: { NivelElo: parseInt(newElo) }
+                $set: { 
+                    NivelElo: parseInt(newElo),
+                    Rango: calcularRango(parseInt(newElo)),
+                    UltimaSincFaceit: new Date()
+                }
             }
         );
 
@@ -1067,22 +1186,10 @@ app.put('/api/elo/update', async (req, res) => {
             return res.status(404).json({ error: 'No se encontró el registro para actualizar' });
         }
 
-        // Actualizar el rango basado en el nuevo ELO
-        const rango = calcularRango(parseInt(newElo));
-        await database.collection('juegousuario').updateOne(
-            { 
-                IDUsuario: parseInt(userId), 
-                IDJuego: parseInt(gameId)
-            },
-            { 
-                $set: { Rango: rango }
-            }
-        );
-
         res.json({
             message: 'ELO actualizado correctamente',
             newElo: newElo,
-            newRango: rango
+            newRango: calcularRango(parseInt(newElo))
         });
     } catch (error) {
         console.error('Error al actualizar ELO:', error);
@@ -1091,7 +1198,7 @@ app.put('/api/elo/update', async (req, res) => {
 });
 
 // Endpoint para calcular y actualizar ELO después de una partida
-app.post('/api/elo/match-result', async (req, res) => {
+app.post('/api/elo/match-result', authenticateToken, eloLimiter, async (req, res) => {
     try {
         const { player1Id, player2Id, gameId, winner, isDraw = false } = req.body;
         
@@ -1101,23 +1208,24 @@ app.post('/api/elo/match-result', async (req, res) => {
 
         const database = client.db(dbName);
         
-        // Obtener ELO actual de ambos jugadores
-        const player1Game = await database.collection('juegousuario').findOne({
-            IDUsuario: parseInt(player1Id),
-            IDJuego: parseInt(gameId)
-        });
-        
-        const player2Game = await database.collection('juegousuario').findOne({
-            IDUsuario: parseInt(player2Id),
-            IDJuego: parseInt(gameId)
-        });
+        // Verificar que ambos jugadores estén en el mismo juego
+        const [player1Game, player2Game] = await Promise.all([
+            database.collection('juegousuario').findOne({
+                IDUsuario: parseInt(player1Id),
+                IDJuego: parseInt(gameId)
+            }),
+            database.collection('juegousuario').findOne({
+                IDUsuario: parseInt(player2Id),
+                IDJuego: parseInt(gameId)
+            })
+        ]);
 
         if (!player1Game || !player2Game) {
-            return res.status(404).json({ error: 'No se encontraron los jugadores' });
+            return res.status(404).json({ error: 'No se encontraron los jugadores en este juego' });
         }
 
         // Calcular nuevos ELOs
-        const K = 32; // Factor K para el cálculo de ELO
+        const K = 32;
         const expectedScore1 = 1 / (1 + Math.pow(10, (player2Game.NivelElo - player1Game.NivelElo) / 400));
         const expectedScore2 = 1 / (1 + Math.pow(10, (player1Game.NivelElo - player2Game.NivelElo) / 400));
 
@@ -1132,22 +1240,36 @@ app.post('/api/elo/match-result', async (req, res) => {
         const newElo1 = Math.round(player1Game.NivelElo + K * (actualScore1 - expectedScore1));
         const newElo2 = Math.round(player2Game.NivelElo + K * (actualScore2 - expectedScore2));
 
-        // Actualizar ELOs
-        await database.collection('juegousuario').updateOne(
-            { IDUsuario: parseInt(player1Id), IDJuego: parseInt(gameId) },
-            { $set: { 
-                NivelElo: newElo1,
-                Rango: calcularRango(newElo1)
-            }}
-        );
+        // Validar nuevos ELOs
+        if (!validarElo(newElo1) || !validarElo(newElo2)) {
+            return res.status(400).json({ error: 'El cálculo de ELO resultó en valores inválidos' });
+        }
 
-        await database.collection('juegousuario').updateOne(
-            { IDUsuario: parseInt(player2Id), IDJuego: parseInt(gameId) },
-            { $set: { 
-                NivelElo: newElo2,
-                Rango: calcularRango(newElo2)
-            }}
-        );
+        // Actualizar ELOs en una transacción
+        const session = client.startSession();
+        try {
+            await session.withTransaction(async () => {
+                await database.collection('juegousuario').updateOne(
+                    { IDUsuario: parseInt(player1Id), IDJuego: parseInt(gameId) },
+                    { $set: { 
+                        NivelElo: newElo1,
+                        Rango: calcularRango(newElo1)
+                    }},
+                    { session }
+                );
+
+                await database.collection('juegousuario').updateOne(
+                    { IDUsuario: parseInt(player2Id), IDJuego: parseInt(gameId) },
+                    { $set: { 
+                        NivelElo: newElo2,
+                        Rango: calcularRango(newElo2)
+                    }},
+                    { session }
+                );
+            });
+        } finally {
+            await session.endSession();
+        }
 
         res.json({
             player1: {
