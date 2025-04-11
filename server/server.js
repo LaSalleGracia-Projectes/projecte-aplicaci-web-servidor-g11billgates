@@ -19,6 +19,8 @@ const { passport: steamPassport } = require('./src/steamAuth');
 const { passport: appleAmazonPassport } = require('./src/appleAmazonAuth');
 const { runSeeders } = require('./src/seeders');
 const axios = require('axios');
+const mongoose = require('mongoose');
+const Usuario = require('./src/models/usuario');
 
 ffmpeg.setFfmpegPath(ffmpegInstaller.path);
 
@@ -118,30 +120,33 @@ app.use(appleAmazonPassport.session());
 // MongoDB client
 const client = new MongoClient(uri);
 
-// Middleware de autenticación
+// Configuración de rate limiting mejorada
+const rateLimit = require('express-rate-limit');
+const limiter = rateLimit({
+    windowMs: 15 * 60 * 1000, // 15 minutos
+    max: 100, // límite de 100 peticiones por ventana
+    message: 'Demasiadas peticiones desde esta IP, por favor intenta de nuevo más tarde',
+    standardHeaders: true,
+    legacyHeaders: false,
+});
+
+// Middleware de autenticación mejorado
 const authenticateToken = (req, res, next) => {
     const authHeader = req.headers['authorization'];
     const token = authHeader && authHeader.split(' ')[1];
 
     if (!token) {
-        return res.status(401).json({ error: 'Se requiere autenticación' });
+        return res.status(401).json({ error: 'Token de autenticación no proporcionado' });
     }
 
-    jwt.verify(token, process.env.JWT_SECRET || 'your-secret-key', (err, user) => {
+    jwt.verify(token, process.env.JWT_SECRET, (err, user) => {
         if (err) {
-            return res.status(403).json({ error: 'Token inválido' });
+            return res.status(403).json({ error: 'Token inválido o expirado' });
         }
         req.user = user;
         next();
     });
 };
-
-// Rate limiting middleware
-const rateLimit = require('express-rate-limit');
-const eloLimiter = rateLimit({
-    windowMs: 15 * 60 * 1000, // 15 minutos
-    max: 100 // límite de 100 solicitudes por ventana
-});
 
 // Validación de ELO
 function validarElo(elo) {
@@ -1101,205 +1106,250 @@ app.get('/users', async (req, res) => {
     }
 });
 
-// Endpoint para obtener el ELO de un usuario en un juego específico
-app.get('/api/elo/:userId/:gameId', authenticateToken, eloLimiter, async (req, res) => {
-    try {
-        const { userId, gameId } = req.params;
-        const database = client.db(dbName);
-        
-        const userGame = await database.collection('juegousuario').findOne({
-            IDUsuario: parseInt(userId),
-            IDJuego: parseInt(gameId)
-        });
-
-        if (!userGame) {
-            return res.status(404).json({ error: 'No se encontró el juego para este usuario' });
-        }
-
-        // Intentar sincronizar con FACEIT si han pasado más de 24 horas
-        const ultimaSync = userGame.UltimaSincFaceit || new Date(0);
-        const horasDesdeSync = (new Date() - ultimaSync) / (1000 * 60 * 60);
-
-        let elo = userGame.NivelElo;
-        if (horasDesdeSync > 24) {
-            const faceitElo = await syncFaceitElo(userId, gameId);
-            if (faceitElo) {
-                elo = faceitElo;
-            }
-        }
-
-        res.json({
-            elo: elo,
-            gameId: gameId,
-            userId: userId,
-            rango: calcularRango(elo),
-            ultimaSincronizacion: userGame.UltimaSincFaceit
-        });
-    } catch (error) {
-        console.error('Error al obtener ELO:', error);
-        res.status(500).json({ error: 'Error al obtener ELO' });
+// Función mejorada para calcular el ELO
+const calcularElo = (elo1, elo2, resultado, kFactor = 32) => {
+    // Validación de rangos de ELO
+    if (elo1 < 0 || elo2 < 0) {
+        throw new Error('Los valores de ELO no pueden ser negativos');
     }
-});
 
-// Endpoint para actualizar el ELO de un usuario
-app.put('/api/elo/update', authenticateToken, eloLimiter, async (req, res) => {
-    try {
-        const { userId, gameId, newElo } = req.body;
-        
-        if (!userId || !gameId || !newElo) {
-            return res.status(400).json({ error: 'Faltan parámetros requeridos' });
-        }
+    // Cálculo de la probabilidad esperada
+    const probabilidadEsperada1 = 1 / (1 + Math.pow(10, (elo2 - elo1) / 400));
+    const probabilidadEsperada2 = 1 - probabilidadEsperada1;
 
-        if (!validarElo(newElo)) {
-            return res.status(400).json({ error: 'ELO inválido. Debe ser un número entre 0 y 3000' });
-        }
-
-        // Verificar datos de FACEIT antes de actualizar
-        const faceitStats = await getFaceitPlayerStats(gameId, userId);
-        if (faceitStats) {
-            const faceitElo = faceitStats.lifetime.average_elo || 1200;
-            // Permitir una diferencia máxima de 300 puntos con FACEIT
-            if (Math.abs(newElo - faceitElo) > 300) {
-                return res.status(400).json({ 
-                    error: 'El ELO propuesto difiere demasiado del ELO de FACEIT',
-                    faceitElo: faceitElo
-                });
-            }
-        }
-
-        const database = client.db(dbName);
-        const result = await database.collection('juegousuario').updateOne(
-            { 
-                IDUsuario: parseInt(userId), 
-                IDJuego: parseInt(gameId)
-            },
-            { 
-                $set: { 
-                    NivelElo: parseInt(newElo),
-                    Rango: calcularRango(parseInt(newElo)),
-                    UltimaSincFaceit: new Date()
-                }
-            }
-        );
-
-        if (result.matchedCount === 0) {
-            return res.status(404).json({ error: 'No se encontró el registro para actualizar' });
-        }
-
-        res.json({
-            message: 'ELO actualizado correctamente',
-            newElo: newElo,
-            newRango: calcularRango(parseInt(newElo))
-        });
-    } catch (error) {
-        console.error('Error al actualizar ELO:', error);
-        res.status(500).json({ error: 'Error al actualizar ELO' });
+    // Cálculo del nuevo ELO
+    let nuevoElo1, nuevoElo2;
+    
+    if (resultado === 'empate') {
+        nuevoElo1 = elo1 + kFactor * (0.5 - probabilidadEsperada1);
+        nuevoElo2 = elo2 + kFactor * (0.5 - probabilidadEsperada2);
+    } else if (resultado === 'victoria1') {
+        nuevoElo1 = elo1 + kFactor * (1 - probabilidadEsperada1);
+        nuevoElo2 = elo2 + kFactor * (0 - probabilidadEsperada2);
+    } else {
+        nuevoElo1 = elo1 + kFactor * (0 - probabilidadEsperada1);
+        nuevoElo2 = elo2 + kFactor * (1 - probabilidadEsperada2);
     }
-});
 
-// Endpoint para calcular y actualizar ELO después de una partida
-app.post('/api/elo/match-result', authenticateToken, eloLimiter, async (req, res) => {
-    try {
-        const { player1Id, player2Id, gameId, winner, isDraw = false } = req.body;
-        
-        if (!player1Id || !player2Id || !gameId || (!isDraw && !winner)) {
-            return res.status(400).json({ error: 'Faltan parámetros requeridos' });
-        }
+    // Asegurar que el ELO no sea negativo
+    nuevoElo1 = Math.max(0, Math.round(nuevoElo1));
+    nuevoElo2 = Math.max(0, Math.round(nuevoElo2));
 
-        const database = client.db(dbName);
-        
-        // Verificar que ambos jugadores estén en el mismo juego
-        const [player1Game, player2Game] = await Promise.all([
-            database.collection('juegousuario').findOne({
-                IDUsuario: parseInt(player1Id),
-                IDJuego: parseInt(gameId)
-            }),
-            database.collection('juegousuario').findOne({
-                IDUsuario: parseInt(player2Id),
-                IDJuego: parseInt(gameId)
-            })
-        ]);
+    return { nuevoElo1, nuevoElo2 };
+};
 
-        if (!player1Game || !player2Game) {
-            return res.status(404).json({ error: 'No se encontraron los jugadores en este juego' });
-        }
-
-        // Calcular nuevos ELOs
-        const K = 32;
-        const expectedScore1 = 1 / (1 + Math.pow(10, (player2Game.NivelElo - player1Game.NivelElo) / 400));
-        const expectedScore2 = 1 / (1 + Math.pow(10, (player1Game.NivelElo - player2Game.NivelElo) / 400));
-
-        let actualScore1, actualScore2;
-        if (isDraw) {
-            actualScore1 = actualScore2 = 0.5;
-        } else {
-            actualScore1 = winner === player1Id ? 1 : 0;
-            actualScore2 = winner === player2Id ? 1 : 0;
-        }
-
-        const newElo1 = Math.round(player1Game.NivelElo + K * (actualScore1 - expectedScore1));
-        const newElo2 = Math.round(player2Game.NivelElo + K * (actualScore2 - expectedScore2));
-
-        // Validar nuevos ELOs
-        if (!validarElo(newElo1) || !validarElo(newElo2)) {
-            return res.status(400).json({ error: 'El cálculo de ELO resultó en valores inválidos' });
-        }
-
-        // Actualizar ELOs en una transacción
-        const session = client.startSession();
-        try {
-            await session.withTransaction(async () => {
-                await database.collection('juegousuario').updateOne(
-                    { IDUsuario: parseInt(player1Id), IDJuego: parseInt(gameId) },
-                    { $set: { 
-                        NivelElo: newElo1,
-                        Rango: calcularRango(newElo1)
-                    }},
-                    { session }
-                );
-
-                await database.collection('juegousuario').updateOne(
-                    { IDUsuario: parseInt(player2Id), IDJuego: parseInt(gameId) },
-                    { $set: { 
-                        NivelElo: newElo2,
-                        Rango: calcularRango(newElo2)
-                    }},
-                    { session }
-                );
-            });
-        } finally {
-            await session.endSession();
-        }
-
-        res.json({
-            player1: {
-                id: player1Id,
-                oldElo: player1Game.NivelElo,
-                newElo: newElo1,
-                change: newElo1 - player1Game.NivelElo
-            },
-            player2: {
-                id: player2Id,
-                oldElo: player2Game.NivelElo,
-                newElo: newElo2,
-                change: newElo2 - player2Game.NivelElo
-            }
-        });
-    } catch (error) {
-        console.error('Error al procesar resultado de partida:', error);
-        res.status(500).json({ error: 'Error al procesar resultado de partida' });
-    }
-});
-
-// Función auxiliar para calcular el rango basado en ELO
-function calcularRango(elo) {
+// Función mejorada para calcular el rango
+const calcularRango = (elo) => {
     if (elo < 800) return 'Bronce';
     if (elo < 1200) return 'Plata';
     if (elo < 1600) return 'Oro';
     if (elo < 2000) return 'Platino';
     if (elo < 2400) return 'Diamante';
     return 'Maestro';
-}
+};
+
+// Endpoint mejorado para obtener el ELO
+app.get('/api/elo/:userId/:gameId', authenticateToken, limiter, async (req, res) => {
+    try {
+        const { userId, gameId } = req.params;
+        
+        // Validación de IDs
+        if (!mongoose.Types.ObjectId.isValid(userId) || !mongoose.Types.ObjectId.isValid(gameId)) {
+            return res.status(400).json({ error: 'IDs inválidos' });
+        }
+
+        const usuario = await Usuario.findById(userId);
+        if (!usuario) {
+            return res.status(404).json({ error: 'Usuario no encontrado' });
+        }
+
+        const eloData = usuario.elo.find(e => e.gameId.toString() === gameId);
+        if (!eloData) {
+            return res.status(404).json({ error: 'No se encontró ELO para este juego' });
+        }
+
+        res.json({
+            elo: eloData.elo,
+            rango: calcularRango(eloData.elo),
+            ultimaActualizacion: eloData.ultimaActualizacion,
+            historial: eloData.historial || []
+        });
+    } catch (error) {
+        console.error('Error al obtener ELO:', error);
+        res.status(500).json({ error: 'Error interno del servidor' });
+    }
+});
+
+// Endpoint mejorado para actualizar el ELO
+app.put('/api/elo/update', authenticateToken, limiter, async (req, res) => {
+    try {
+        const { userId, gameId, newElo } = req.body;
+
+        // Validaciones
+        if (!userId || !gameId || newElo === undefined) {
+            return res.status(400).json({ error: 'Faltan parámetros requeridos' });
+        }
+
+        if (!mongoose.Types.ObjectId.isValid(userId) || !mongoose.Types.ObjectId.isValid(gameId)) {
+            return res.status(400).json({ error: 'IDs inválidos' });
+        }
+
+        if (newElo < 0) {
+            return res.status(400).json({ error: 'El ELO no puede ser negativo' });
+        }
+
+        const usuario = await Usuario.findById(userId);
+        if (!usuario) {
+            return res.status(404).json({ error: 'Usuario no encontrado' });
+        }
+
+        const eloIndex = usuario.elo.findIndex(e => e.gameId.toString() === gameId);
+        if (eloIndex === -1) {
+            usuario.elo.push({
+                gameId,
+                elo: newElo,
+                ultimaActualizacion: new Date(),
+                historial: []
+            });
+        } else {
+            // Guardar el ELO anterior en el historial
+            usuario.elo[eloIndex].historial = usuario.elo[eloIndex].historial || [];
+            usuario.elo[eloIndex].historial.push({
+                elo: usuario.elo[eloIndex].elo,
+                fecha: usuario.elo[eloIndex].ultimaActualizacion
+            });
+
+            // Actualizar el ELO
+            usuario.elo[eloIndex].elo = newElo;
+            usuario.elo[eloIndex].ultimaActualizacion = new Date();
+        }
+
+        await usuario.save();
+
+        res.json({
+            mensaje: 'ELO actualizado correctamente',
+            nuevoElo: newElo,
+            rango: calcularRango(newElo)
+        });
+    } catch (error) {
+        console.error('Error al actualizar ELO:', error);
+        res.status(500).json({ error: 'Error interno del servidor' });
+    }
+});
+
+// Endpoint mejorado para registrar resultado de partida
+app.post('/api/elo/match-result', authenticateToken, limiter, async (req, res) => {
+    try {
+        const { player1Id, player2Id, gameId, winner, isDraw } = req.body;
+
+        // Validaciones
+        if (!player1Id || !player2Id || !gameId || (!winner && !isDraw)) {
+            return res.status(400).json({ error: 'Faltan parámetros requeridos' });
+        }
+
+        if (!mongoose.Types.ObjectId.isValid(player1Id) || 
+            !mongoose.Types.ObjectId.isValid(player2Id) || 
+            !mongoose.Types.ObjectId.isValid(gameId)) {
+            return res.status(400).json({ error: 'IDs inválidos' });
+        }
+
+        const [player1, player2] = await Promise.all([
+            Usuario.findById(player1Id),
+            Usuario.findById(player2Id)
+        ]);
+
+        if (!player1 || !player2) {
+            return res.status(404).json({ error: 'Uno o ambos jugadores no encontrados' });
+        }
+
+        const elo1 = player1.elo.find(e => e.gameId.toString() === gameId)?.elo || 1000;
+        const elo2 = player2.elo.find(e => e.gameId.toString() === gameId)?.elo || 1000;
+
+        let resultado;
+        if (isDraw) {
+            resultado = 'empate';
+        } else if (winner === player1Id) {
+            resultado = 'victoria1';
+        } else {
+            resultado = 'victoria2';
+        }
+
+        const { nuevoElo1, nuevoElo2 } = calcularElo(elo1, elo2, resultado);
+
+        // Actualizar ELOs en una transacción
+        const session = await mongoose.startSession();
+        session.startTransaction();
+
+        try {
+            // Actualizar jugador 1
+            const eloIndex1 = player1.elo.findIndex(e => e.gameId.toString() === gameId);
+            if (eloIndex1 === -1) {
+                player1.elo.push({
+                    gameId,
+                    elo: nuevoElo1,
+                    ultimaActualizacion: new Date(),
+                    historial: []
+                });
+            } else {
+                player1.elo[eloIndex1].historial = player1.elo[eloIndex1].historial || [];
+                player1.elo[eloIndex1].historial.push({
+                    elo: player1.elo[eloIndex1].elo,
+                    fecha: player1.elo[eloIndex1].ultimaActualizacion
+                });
+                player1.elo[eloIndex1].elo = nuevoElo1;
+                player1.elo[eloIndex1].ultimaActualizacion = new Date();
+            }
+
+            // Actualizar jugador 2
+            const eloIndex2 = player2.elo.findIndex(e => e.gameId.toString() === gameId);
+            if (eloIndex2 === -1) {
+                player2.elo.push({
+                    gameId,
+                    elo: nuevoElo2,
+                    ultimaActualizacion: new Date(),
+                    historial: []
+                });
+            } else {
+                player2.elo[eloIndex2].historial = player2.elo[eloIndex2].historial || [];
+                player2.elo[eloIndex2].historial.push({
+                    elo: player2.elo[eloIndex2].elo,
+                    fecha: player2.elo[eloIndex2].ultimaActualizacion
+                });
+                player2.elo[eloIndex2].elo = nuevoElo2;
+                player2.elo[eloIndex2].ultimaActualizacion = new Date();
+            }
+
+            await Promise.all([
+                player1.save({ session }),
+                player2.save({ session })
+            ]);
+
+            await session.commitTransaction();
+
+            res.json({
+                mensaje: 'Resultado de partida registrado correctamente',
+                player1: {
+                    eloAnterior: elo1,
+                    eloNuevo: nuevoElo1,
+                    rango: calcularRango(nuevoElo1)
+                },
+                player2: {
+                    eloAnterior: elo2,
+                    eloNuevo: nuevoElo2,
+                    rango: calcularRango(nuevoElo2)
+                }
+            });
+        } catch (error) {
+            await session.abortTransaction();
+            throw error;
+        } finally {
+            session.endSession();
+        }
+    } catch (error) {
+        console.error('Error al registrar resultado de partida:', error);
+        res.status(500).json({ error: 'Error interno del servidor' });
+    }
+});
 
 // Manejo de errores global
 app.use((err, req, res, next) => {
