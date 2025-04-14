@@ -26,7 +26,7 @@ const Match = require('./src/models/match');
 ffmpeg.setFfmpegPath(ffmpegInstaller.path);
 
 const app = express();
-const port = process.env.PORT || 3000;
+const port = process.env.PORT || 3001;
 const uri = process.env.MONGODB_URI || "mongodb+srv://rogerjove2005:rogjov01@cluster0.rxxyf.mongodb.net/";
 const dbName = process.env.DB_NAME || "Projecte_prova";
 
@@ -1528,6 +1528,71 @@ app.put('/api/matches/:matchId/resultado', authenticateToken, async (req, res) =
     }
 });
 
+// Endpoint para obtener usuarios con juegos en común
+app.get('/api/users/matching', async (req, res) => {
+    try {
+        const { userId } = req.query;
+        
+        if (!userId) {
+            return res.status(400).json({ error: 'Se requiere el ID del usuario' });
+        }
+
+        const database = client.db(dbName);
+
+        // Obtener el usuario actual
+        const currentUser = await database.collection('usuario').findOne({ _id: new ObjectId(userId) });
+        if (!currentUser) {
+            return res.status(404).json({ error: 'Usuario no encontrado' });
+        }
+
+        // Obtener los nombres de los juegos del usuario actual
+        const userGameNames = currentUser.Juegos.map(game => game.nombre);
+
+        // Buscar usuarios que compartan al menos un juego
+        const matchingUsers = await database.collection('usuario')
+            .find({
+                _id: { $ne: new ObjectId(userId) },
+                Juegos: {
+                    $elemMatch: {
+                        nombre: { $in: userGameNames }
+                    }
+                }
+            })
+            .project({
+                _id: 1,
+                Nombre: 1,
+                FotoPerfil: 1,
+                Juegos: 1,
+                Edad: 1,
+                Region: 1,
+                Descripcion: 1
+            })
+            .toArray();
+
+        // Filtrar y formatear los resultados para mostrar solo los juegos en común
+        const formattedUsers = matchingUsers.map(user => {
+            const commonGames = user.Juegos.filter(userGame => 
+                userGameNames.includes(userGame.nombre)
+            );
+
+            return {
+                id: user._id,
+                nombre: user.Nombre,
+                fotoPerfil: user.FotoPerfil,
+                juegos: commonGames,
+                edad: user.Edad,
+                region: user.Region,
+                descripcion: user.Descripcion
+            };
+        });
+
+        res.json(formattedUsers);
+    } catch (error) {
+        console.error('Error:', error);
+        res.status(500).json({ error: 'Error al obtener usuarios' });
+    }
+});
+
 // Manejo de errores global
 app.use((err, req, res, next) => {
     console.error(err.stack);
@@ -1540,6 +1605,17 @@ app.use((err, req, res, next) => {
 // Start server
 connectDB().then(() => {
     app.listen(port, () => {
-        console.log(`Server running on port ${port}`);
+        console.log(`Servidor corriendo en puerto ${port}`);
+    }).on('error', (err) => {
+        if (err.code === 'EADDRINUSE') {
+            console.error(`Error: El puerto ${port} ya está en uso. Intentando con el siguiente puerto...`);
+            // Intentar con el siguiente puerto
+            const newPort = port + 1;
+            app.listen(newPort, () => {
+                console.log(`Servidor corriendo en puerto ${newPort}`);
+            });
+        } else {
+            console.error('Error al iniciar el servidor:', err);
+        }
     });
 }); 
