@@ -1545,8 +1545,14 @@ app.get('/api/users/matching', async (req, res) => {
             return res.status(404).json({ error: 'Usuario no encontrado' });
         }
 
+        // Obtener los juegos del usuario actual
+        const userGames = currentUser.Juegos || [];
+        if (userGames.length === 0) {
+            return res.json([]); // Si el usuario no tiene juegos, retornar array vacío
+        }
+
         // Obtener los nombres de los juegos del usuario actual
-        const userGameNames = currentUser.Juegos.map(game => game.nombre);
+        const userGameNames = userGames.map(game => game.nombre);
 
         // Buscar usuarios que compartan al menos un juego
         const matchingUsers = await database.collection('usuario')
@@ -1554,7 +1560,8 @@ app.get('/api/users/matching', async (req, res) => {
                 _id: { $ne: new ObjectId(userId) },
                 Juegos: {
                     $elemMatch: {
-                        nombre: { $in: userGameNames }
+                        nombre: { $in: userGameNames },
+                        rango: { $exists: true }
                     }
                 }
             })
@@ -1569,22 +1576,30 @@ app.get('/api/users/matching', async (req, res) => {
             })
             .toArray();
 
-        // Filtrar y formatear los resultados para mostrar solo los juegos en común
+        // Filtrar y formatear los resultados
         const formattedUsers = matchingUsers.map(user => {
-            const commonGames = user.Juegos.filter(userGame => 
-                userGameNames.includes(userGame.nombre)
+            // Encontrar juegos en común
+            const commonGames = user.Juegos.filter(game => 
+                userGameNames.includes(game.nombre) && game.rango
             );
 
+            // Calcular porcentaje de coincidencia basado en juegos en común
+            const matchPercentage = (commonGames.length / userGameNames.length) * 100;
+
             return {
-                id: user._id,
-                nombre: user.Nombre,
-                fotoPerfil: user.FotoPerfil,
-                juegos: commonGames,
-                edad: user.Edad,
-                region: user.Region,
-                descripcion: user.Descripcion
+                _id: user._id,
+                Nombre: user.Nombre,
+                FotoPerfil: user.FotoPerfil,
+                Juegos: commonGames, // Solo incluir juegos en común
+                Edad: user.Edad,
+                Region: user.Region,
+                Descripcion: user.Descripcion,
+                matchPercentage: Math.round(matchPercentage)
             };
         });
+
+        // Ordenar por porcentaje de coincidencia
+        formattedUsers.sort((a, b) => b.matchPercentage - a.matchPercentage);
 
         res.json(formattedUsers);
     } catch (error) {
