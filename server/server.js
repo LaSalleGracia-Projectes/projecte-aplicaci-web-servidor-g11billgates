@@ -332,18 +332,25 @@ async function createDecoyUsers(database) {
 
         // Nombres y descripciones para los usuarios decoy
         const decoyUsers = [
-            { nombre: 'AlexGamer', edad: 22, genero: 'Masculino', descripcion: 'Busco equipo para rankeds. Main ADC en LoL y Duelista en Valorant.' },
-            { nombre: 'SarahPro', edad: 25, genero: 'Femenino', descripcion: 'Streamer y jugadora competitiva. Especialista en estrategia y análisis de juego.' },
-            { nombre: 'MikeTheTank', edad: 20, genero: 'Masculino', descripcion: 'Tank main en todos los juegos. Siempre protegiendo al equipo.' },
-            { nombre: 'LunaGaming', edad: 23, genero: 'Femenino', descripcion: 'Amante de los FPS. Alta precisión y buen trabajo en equipo.' },
-            { nombre: 'CarlosNinja', edad: 21, genero: 'Masculino', descripcion: 'Jugador versátil. Me adapto a cualquier rol y estrategia.' },
-            { nombre: 'EmmaBuilder', edad: 24, genero: 'Femenino', descripcion: 'Especialista en construcción y edición en Fortnite. Busco duo para torneos.' },
-            { nombre: 'DavidSniper', edad: 22, genero: 'Masculino', descripcion: 'AWP main en CS2. Precisión y paciencia son mis puntos fuertes.' },
-            { nombre: 'SophiaSupport', edad: 25, genero: 'Femenino', descripcion: 'Support main en LoL. Me encanta ayudar al equipo a brillar.' },
-            { nombre: 'LeoRush', edad: 20, genero: 'Masculino', descripcion: 'Jugador agresivo. Me especializo en early game y snowball.' },
-            { nombre: 'MiaTactics', edad: 23, genero: 'Femenino', descripcion: 'Estratega nata. Me gusta analizar y explotar las debilidades del rival.' },
-            { nombre: 'RyanFlex', edad: 21, genero: 'Masculino', descripcion: 'Jugador flexible. Puedo adaptarme a cualquier rol y situación.' },
-            { nombre: 'ZoeCreative', edad: 24, genero: 'Femenino', descripcion: 'Jugadora creativa. Me especializo en estrategias poco convencionales.' }
+            // Grupo 1: League of Legends y Valorant
+            { nombre: 'AlexGamer', edad: 22, genero: 'Masculino', descripcion: 'Busco equipo para rankeds. Main ADC en LoL y Duelista en Valorant.', juegos: ['League of Legends', 'Valorant'] },
+            { nombre: 'SarahPro', edad: 25, genero: 'Femenino', descripcion: 'Streamer y jugadora competitiva. Especialista en estrategia y análisis de juego.', juegos: ['League of Legends', 'Valorant'] },
+            { nombre: 'MikeTheTank', edad: 20, genero: 'Masculino', descripcion: 'Tank main en todos los juegos. Siempre protegiendo al equipo.', juegos: ['League of Legends', 'Valorant'] },
+            
+            // Grupo 2: Counter-Strike 2 y Fortnite
+            { nombre: 'LunaGaming', edad: 23, genero: 'Femenino', descripcion: 'Amante de los FPS. Alta precisión y buen trabajo en equipo.', juegos: ['Counter-Strike 2', 'Fortnite'] },
+            { nombre: 'CarlosNinja', edad: 21, genero: 'Masculino', descripcion: 'Jugador versátil. Me adapto a cualquier rol y estrategia.', juegos: ['Counter-Strike 2', 'Fortnite'] },
+            { nombre: 'EmmaBuilder', edad: 24, genero: 'Femenino', descripcion: 'Especialista en construcción y edición en Fortnite. Busco duo para torneos.', juegos: ['Counter-Strike 2', 'Fortnite'] },
+            
+            // Grupo 3: League of Legends y Counter-Strike 2
+            { nombre: 'DavidSniper', edad: 22, genero: 'Masculino', descripcion: 'AWP main en CS2. Precisión y paciencia son mis puntos fuertes.', juegos: ['League of Legends', 'Counter-Strike 2'] },
+            { nombre: 'SophiaSupport', edad: 25, genero: 'Femenino', descripcion: 'Support main en LoL. Me encanta ayudar al equipo a brillar.', juegos: ['League of Legends', 'Counter-Strike 2'] },
+            { nombre: 'LeoRush', edad: 20, genero: 'Masculino', descripcion: 'Jugador agresivo. Me especializo en early game y snowball.', juegos: ['League of Legends', 'Counter-Strike 2'] },
+            
+            // Grupo 4: Valorant y Fortnite
+            { nombre: 'MiaTactics', edad: 23, genero: 'Femenino', descripcion: 'Estratega nata. Me gusta analizar y explotar las debilidades del rival.', juegos: ['Valorant', 'Fortnite'] },
+            { nombre: 'RyanFlex', edad: 21, genero: 'Masculino', descripcion: 'Jugador flexible. Puedo adaptarme a cualquier rol y situación.', juegos: ['Valorant', 'Fortnite'] },
+            { nombre: 'ZoeCreative', edad: 24, genero: 'Femenino', descripcion: 'Jugadora creativa. Me especializo en estrategias poco convencionales.', juegos: ['Valorant', 'Fortnite'] }
         ];
 
         // Verificar si ya existen usuarios decoy
@@ -356,15 +363,15 @@ async function createDecoyUsers(database) {
         // Crear cada usuario decoy
         for (const user of decoyUsers) {
             try {
-                // Seleccionar 2-3 juegos aleatorios para cada usuario
+                // Asignar los juegos específicos para cada usuario
                 const userGames = [];
-                const numGames = Math.floor(Math.random() * 2) + 2; // 2 o 3 juegos
-                const availableGames = [...juegosExistentes];
                 
-                for (let i = 0; i < numGames; i++) {
-                    const gameIndex = Math.floor(Math.random() * availableGames.length);
-                    const selectedGame = availableGames[gameIndex];
-                    availableGames.splice(gameIndex, 1); // Evitar duplicados
+                for (const gameName of user.juegos) {
+                    const selectedGame = juegosExistentes.find(game => game.NombreJuego === gameName);
+                    if (!selectedGame) {
+                        console.error(`No se encontró el juego: ${gameName}`);
+                        continue;
+                    }
                     
                     const rangos = rangosPorJuego[selectedGame.NombreJuego];
                     if (!rangos) {
@@ -1551,17 +1558,17 @@ app.get('/api/users/matching', async (req, res) => {
             return res.json([]); // Si el usuario no tiene juegos, retornar array vacío
         }
 
-        // Obtener los nombres de los juegos del usuario actual
-        const userGameNames = userGames.map(game => game.nombre);
+        // Crear un conjunto de nombres de juegos para búsqueda más eficiente
+        const userGameNames = new Set(userGames.map(game => game.nombre));
 
-        // Buscar usuarios que compartan al menos un juego
-        const matchingUsers = await database.collection('usuario')
+        // Buscar usuarios que tengan al menos un juego en común
+        const potentialMatches = await database.collection('usuario')
             .find({
                 _id: { $ne: new ObjectId(userId) },
                 Juegos: {
                     $elemMatch: {
-                        nombre: { $in: userGameNames },
-                        rango: { $exists: true }
+                        nombre: { $in: [...userGameNames] },
+                        rango: { $exists: true, $ne: null }
                     }
                 }
             })
@@ -1576,30 +1583,38 @@ app.get('/api/users/matching', async (req, res) => {
             })
             .toArray();
 
-        // Filtrar y formatear los resultados
-        const formattedUsers = matchingUsers.map(user => {
-            // Encontrar juegos en común
-            const commonGames = user.Juegos.filter(game => 
-                userGameNames.includes(game.nombre) && game.rango
-            );
+        // Filtrar usuarios que tengan exactamente los mismos juegos
+        const matchingUsers = potentialMatches.filter(user => {
+            // Verificar que tengan exactamente el mismo número de juegos
+            if (user.Juegos.length !== userGames.length) {
+                return false;
+            }
 
-            // Calcular porcentaje de coincidencia basado en juegos en común
-            const matchPercentage = (commonGames.length / userGameNames.length) * 100;
+            // Crear conjuntos de nombres de juegos para comparación
+            const userGameSet = new Set(user.Juegos.map(g => g.nombre));
+            const currentUserGameSet = new Set(userGames.map(g => g.nombre));
 
-            return {
-                _id: user._id,
-                Nombre: user.Nombre,
-                FotoPerfil: user.FotoPerfil,
-                Juegos: commonGames, // Solo incluir juegos en común
-                Edad: user.Edad,
-                Region: user.Region,
-                Descripcion: user.Descripcion,
-                matchPercentage: Math.round(matchPercentage)
-            };
+            // Verificar que todos los juegos coincidan exactamente
+            const hasAllGames = [...userGameSet].every(name => currentUserGameSet.has(name));
+            const hasNoExtraGames = [...currentUserGameSet].every(name => userGameSet.has(name));
+
+            // Verificar que todos los juegos tengan rango definido
+            const allGamesHaveRank = user.Juegos.every(game => game.rango);
+
+            return hasAllGames && hasNoExtraGames && allGamesHaveRank;
         });
 
-        // Ordenar por porcentaje de coincidencia
-        formattedUsers.sort((a, b) => b.matchPercentage - a.matchPercentage);
+        // Formatear los resultados
+        const formattedUsers = matchingUsers.map(user => ({
+            _id: user._id,
+            Nombre: user.Nombre,
+            FotoPerfil: user.FotoPerfil,
+            Juegos: user.Juegos,
+            Edad: user.Edad,
+            Region: user.Region,
+            Descripcion: user.Descripcion,
+            matchPercentage: 100
+        }));
 
         res.json(formattedUsers);
     } catch (error) {
