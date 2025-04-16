@@ -649,6 +649,12 @@ app.post('/register', async (req, res) => {
     try {
         const { Nombre, Correo, Contraseña, FotoPerfil, Edad, Region, Descripcion, Juegos, Genero } = req.body;
         
+        console.log('Datos recibidos en registro:', {
+            Nombre,
+            Correo,
+            Juegos // Log para ver qué juegos se reciben
+        });
+
         const database = client.db(dbName);
         const usuarios = database.collection('usuario');
         
@@ -665,7 +671,34 @@ app.post('/register', async (req, res) => {
         // Hash the password
         const saltRounds = 10;
         const hashedPassword = await bcrypt.hash(Contraseña, saltRounds);
+
+        // Format games array - Asegurando que los juegos tengan la estructura correcta con rangos
+        let formattedGames = [];
         
+        if (Juegos && Array.isArray(Juegos)) {
+            formattedGames = Juegos.map(game => {
+                // Si el juego viene como array [nombre, rango]
+                if (Array.isArray(game) && game.length >= 2) {
+                    return {
+                        nombre: game[0] || '',
+                        rango: game[1] || 'Principiante',
+                        addedAt: new Date()
+                    };
+                }
+                // Si el juego viene como objeto {nombre, rango}
+                else if (game && typeof game === 'object') {
+                    return {
+                        nombre: game.nombre || game.name || '',
+                        rango: game.rango || game.rank || 'Principiante',
+                        addedAt: new Date()
+                    };
+                }
+                return null;
+            }).filter(game => game !== null && game.nombre); // Filtrar juegos inválidos
+        }
+
+        console.log('Juegos formateados:', formattedGames);
+
         // Create user document with all fields
         const userDocument = {
             IDUsuario: Number(IDUsuario),
@@ -676,7 +709,7 @@ app.post('/register', async (req, res) => {
             Edad: Edad ? Number(Edad) : 18,
             Region: Region ? String(Region) : "Not specified",
             Descripcion: Descripcion ? String(Descripcion) : "¡Hola! Me gusta jugar videojuegos.",
-            Juegos: Array.isArray(Juegos) ? Juegos : [],
+            Juegos: formattedGames,
             Genero: Genero ? String(Genero) : "Not specified"
         };
 
@@ -690,30 +723,25 @@ app.post('/register', async (req, res) => {
 
         console.log('Intentando registrar usuario:', {
             ...userDocument,
-            Contraseña: '[PROTECTED]'
+            Contraseña: '[PROTECTED]',
+            Juegos: formattedGames
         });
-        
-        // Insert new user
+
+        // Insert the user
         const result = await usuarios.insertOne(userDocument);
         
-        if (!result.acknowledged) {
-            throw new Error('Failed to insert user');
+        if (result.insertedId) {
+            res.status(201).json({
+                message: 'User registered successfully',
+                userId: result.insertedId,
+                juegos: formattedGames // Incluir los juegos en la respuesta
+            });
+        } else {
+            res.status(500).json({ error: 'Failed to register user' });
         }
-        
-        // Return success response with user data (excluding password)
-        const { Contraseña: _, ...userData } = userDocument;
-        res.status(201).json({
-            message: 'User registered successfully',
-            user: userData
-        });
-        
     } catch (error) {
         console.error('Registration error:', error);
-        res.status(500).json({ 
-            error: 'Error registering user',
-            details: error.message,
-            validationErrors: error.errInfo?.details?.schemaRulesNotSatisfied
-        });
+        res.status(500).json({ error: 'Error registering user' });
     }
 });
 
@@ -1096,20 +1124,32 @@ app.get('/users', async (req, res) => {
         const database = client.db(dbName);
         const usuarios = database.collection('usuario');
         
-        // Obtener todos los usuarios (excluyendo la contraseña)
-        const users = await usuarios.find({}, {
-            projection: {
-                Contraseña: 0 // Excluir la contraseña
-            }
+        // Obtener todos los usuarios con una proyección específica
+        const users = await usuarios.find({}).project({
+            IDUsuario: 1,
+            Nombre: 1,
+            Correo: 1,
+            FotoPerfil: 1,
+            Edad: 1,
+            Region: 1,
+            Descripcion: 1,
+            Juegos: 1,
+            Genero: 1,
+            _id: 0
         }).toArray();
         
-        res.json(users);
+        if (!users) {
+            return res.status(404).json({ error: 'No se encontraron usuarios' });
+        }
+
+        console.log('Usuarios encontrados:', users.length);
+        res.status(200).json(users);
         
     } catch (error) {
-        console.error('Error fetching users:', error);
+        console.error('Error al obtener usuarios:', error);
         res.status(500).json({ 
-            error: 'Error fetching users',
-            details: error.message
+            error: 'Error al obtener usuarios',
+            message: error.message
         });
     }
 });
@@ -1547,7 +1587,10 @@ app.get('/api/users/matching', async (req, res) => {
         const database = client.db(dbName);
 
         // Obtener el usuario actual
-        const currentUser = await database.collection('usuario').findOne({ _id: new ObjectId(userId) });
+        const currentUser = await database.collection('usuario').findOne({ 
+            IDUsuario: parseInt(userId) 
+        });
+        
         if (!currentUser) {
             return res.status(404).json({ error: 'Usuario no encontrado' });
         }
