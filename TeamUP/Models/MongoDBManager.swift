@@ -425,6 +425,25 @@ class MongoDBManager {
         let decoder = JSONDecoder()
         return try decoder.decode([User].self, from: data)
     }
+
+    func getMatchingUsers(userId: String) async throws -> [User] {
+        guard let url = URL(string: "\(baseURL)/api/users/matching?userId=\(userId)") else {
+            throw MongoDBError.invalidURL
+        }
+        
+        let (data, response) = try await URLSession.shared.data(from: url)
+        
+        guard let httpResponse = response as? HTTPURLResponse else {
+            throw MongoDBError.serverError(message: "Invalid response")
+        }
+        
+        if !(200...299).contains(httpResponse.statusCode) {
+            throw MongoDBError.serverError(message: "Failed with status code: \(httpResponse.statusCode)")
+        }
+        
+        let decoder = JSONDecoder()
+        return try decoder.decode([User].self, from: data)
+    }
 }
 
 enum MongoDBError: Error {

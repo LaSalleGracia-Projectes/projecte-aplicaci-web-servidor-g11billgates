@@ -8,6 +8,7 @@ class MainScreenViewModel: ObservableObject {
     @Published var isLoading = true
     
     private let mongoManager = MongoDBManager.shared
+    private let authManager = AuthenticationManager.shared
     
     // Usuarios de prueba por defecto
     private let defaultUsers = [
@@ -79,23 +80,23 @@ class MainScreenViewModel: ObservableObject {
         isLoading = true
         
         do {
-            // Intentamos cargar usuarios registrados
-            let registeredUsers = try await mongoManager.getRegisteredUsers()
-            
-            // Combinamos usuarios registrados con usuarios de prueba
-            users = registeredUsers + defaultUsers
-            
-            // Si no hay usuarios registrados, usamos solo los usuarios de prueba
-            if registeredUsers.isEmpty {
-                users = defaultUsers
+            // Get current user
+            guard let currentUser = authManager.currentUser else {
+                users = []
+                isLoading = false
+                return
             }
             
+            // Get matching users
+            let matchingUsers = try await mongoManager.getMatchingUsers(userId: currentUser.id)
+            
+            // Update UI with matching users
+            users = matchingUsers
             isLoading = false
             
         } catch {
             print("Error loading users: \(error)")
-            // Si hay error, usamos los usuarios de prueba
-            users = defaultUsers
+            users = []
             isLoading = false
         }
     }

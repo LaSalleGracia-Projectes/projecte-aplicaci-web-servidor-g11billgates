@@ -62,23 +62,24 @@ class RegisterViewModel: ObservableObject {
         showError = false
         
         do {
-            // Create the user
+            // Convertir los juegos seleccionados al formato correcto
+            let games = selectedGames.compactMap { game -> (String, String)? in
+                guard let rank = game.selectedRank else { return nil }
+                return (game.name, rank)
+            }
+            
+            // Create the user with the selected games
             let newUser = User(
                 name: username,
                 age: 0, // You might want to add age field in your registration form
                 gender: gender.rawValue,
                 description: "",
-                games: [],
+                games: games,
                 profileImage: "default_profile" // Handle profile image upload separately
             )
             
             // Register user in MongoDB
             try await authManager.register(user: newUser, email: email, password: password)
-            
-            // Add selected games for the user
-            for game in selectedGames {
-                try await authManager.addGame(game: game, rank: "Beginner")
-            }
             
             print("Usuario registrado exitosamente en MongoDB")
             isRegistering = false

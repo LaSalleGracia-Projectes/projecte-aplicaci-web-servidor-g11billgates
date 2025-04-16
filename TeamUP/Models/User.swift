@@ -37,7 +37,14 @@ struct User: Identifiable, Decodable {
     
     init(from decoder: Decoder) throws {
         let container = try decoder.container(keyedBy: CodingKeys.self)
-        id = try container.decode(String.self, forKey: .id)
+        
+        // Handle ObjectId conversion
+        if let objectId = try? container.decode(ObjectId.self, forKey: .id) {
+            id = objectId.stringValue
+        } else {
+            id = try container.decode(String.self, forKey: .id)
+        }
+        
         name = try container.decode(String.self, forKey: .name)
         age = try container.decode(Int.self, forKey: .age)
         gender = try container.decode(String.self, forKey: .gender)
@@ -46,7 +53,7 @@ struct User: Identifiable, Decodable {
         likes = try container.decodeIfPresent([String].self, forKey: .likes) ?? []
         matches = try container.decodeIfPresent([String].self, forKey: .matches) ?? []
         
-        // Decodificar los juegos con su estructura correcta
+        // Decode games with their correct structure
         let gamesData = try container.decode([[String: String]].self, forKey: .games)
         games = gamesData.compactMap { gameDict -> (String, String)? in
             guard let nombre = gameDict["nombre"],
@@ -55,5 +62,15 @@ struct User: Identifiable, Decodable {
             }
             return (nombre, rango)
         }
+    }
+}
+
+// Helper struct to decode MongoDB ObjectId
+struct ObjectId: Decodable {
+    let stringValue: String
+    
+    init(from decoder: Decoder) throws {
+        let container = try decoder.singleValueContainer()
+        stringValue = try container.decode(String.self)
     }
 } 
