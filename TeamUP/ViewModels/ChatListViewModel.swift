@@ -38,32 +38,40 @@ class ChatListViewModel: ObservableObject {
             ChatPreview(
                 id: "1",
                 username: "Marc",
-                lastMessage: "¿Jugamos una partida?",
-                timestamp: "14:30",
-                profileImage: "https://example.com/profile1.jpg"
+                lastMessage: "¡Hola! ¿Quieres jugar?",
+                timestamp: "10:30",
+                profileImage: "https://example.com/profile1.jpg",
+                participants: ["1", currentUserId],
+                isHidden: false
             ),
             ChatPreview(
                 id: "2",
                 username: "Roger",
-                lastMessage: "¡Claro! Dame 5 minutos",
-                timestamp: "14:31",
-                profileImage: "https://example.com/profile2.jpg"
+                lastMessage: "¿A qué hora quedamos?",
+                timestamp: "09:15",
+                profileImage: "https://example.com/profile2.jpg",
+                participants: ["2", currentUserId],
+                isHidden: false
             ),
             ChatPreview(
                 id: "3",
                 username: "Pau",
-                lastMessage: "¿Quién más se apunta?",
-                timestamp: "14:32",
-                profileImage: "https://example.com/profile3.jpg"
+                lastMessage: "¡Buena partida!",
+                timestamp: "Ayer",
+                profileImage: "https://example.com/profile3.jpg",
+                participants: ["3", currentUserId],
+                isHidden: false
             ),
             ChatPreview(
                 id: "4",
                 username: "Jordi",
-                lastMessage: "¡Yo!",
-                timestamp: "14:33",
-                profileImage: "https://example.com/profile4.jpg"
+                lastMessage: "¿Jugamos otra?",
+                timestamp: "Lunes",
+                profileImage: "https://example.com/profile4.jpg",
+                participants: ["4", currentUserId],
+                isHidden: false
             )
-        ]
+        ].filter { !$0.isHidden }
     }
     
     private func loadUsers() {

@@ -14,6 +14,8 @@ struct ChatPreview: Identifiable {
     let lastMessage: String
     let timestamp: String
     let profileImage: String
+    let participants: [String]
+    let isHidden: Bool
 }
 
 // MARK: - View
@@ -83,7 +85,7 @@ struct ChatRowView: View {
     var body: some View {
         NavigationLink(destination: {
             if let user = viewModel.findUser(withName: chat.username) {
-                ChatView(chatId: chat.id, userId: user.id, userAge: user.age)
+                ChatView(chatId: chat.id, userId: user.id, userAge: user.age, reportedUserId: chat.participants.first { $0 != user.id } ?? "")
             }
         }) {
             HStack(spacing: 12) {
