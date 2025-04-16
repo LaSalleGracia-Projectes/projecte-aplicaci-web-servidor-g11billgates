@@ -1666,6 +1666,48 @@ app.get('/api/users/matching', async (req, res) => {
     }
 });
 
+// Endpoint para reportar un usuario y eliminar el chat
+app.post('/report-user', async (req, res) => {
+    try {
+        const { userId, reportedUserId, chatId } = req.body;
+        
+        if (!userId || !reportedUserId || !chatId) {
+            return res.status(400).json({ error: 'Faltan datos requeridos' });
+        }
+
+        const database = client.db(dbName);
+        const chats = database.collection('chat');
+        const reportes = database.collection('reportes');
+
+        // Eliminar el chat
+        const deleteResult = await chats.deleteOne({ _id: new ObjectId(chatId) });
+        
+        if (!deleteResult.deletedCount) {
+            return res.status(404).json({ error: 'Chat no encontrado' });
+        }
+
+        // Crear el reporte
+        const reporte = {
+            reporterId: userId,
+            reportedUserId: reportedUserId,
+            chatId: chatId,
+            fecha: new Date(),
+            estado: 'pendiente'
+        };
+
+        await reportes.insertOne(reporte);
+
+        res.status(200).json({ 
+            message: 'Usuario reportado y chat eliminado exitosamente',
+            reporte: reporte
+        });
+
+    } catch (error) {
+        console.error('Error al reportar usuario:', error);
+        res.status(500).json({ error: 'Error al procesar el reporte' });
+    }
+});
+
 // Manejo de errores global
 app.use((err, req, res, next) => {
     console.error(err.stack);
