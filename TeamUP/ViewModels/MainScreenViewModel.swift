@@ -14,129 +14,66 @@ class MainScreenViewModel: ObservableObject {
         authManager.currentUser?.id ?? ""
     }
     
-    // Usuarios de prueba por defecto
-    private let defaultUsers = [
-        User(
-            name: "Alex",
-            age: 23,
-            gender: "Hombre",
-            description: "Buscando equipo para rankeds",
-            games: [
-                ("League of Legends", "Platino"),
-                ("Valorant", "Oro")
-            ],
-            profileImage: "DwarfTestIcon"
-        ),
-        User(
-            name: "Laura",
-            age: 25,
-            gender: "Mujer",
-            description: "Main support, looking for ADC",
-            games: [
-                ("League of Legends", "Diamante"),
-                ("World of Warcraft", "2100+")
-            ],
-            profileImage: "ToadTestIcon"
-        ),
-        User(
-            name: "Roger",
-            age: 28,
-            gender: "Hombre",
-            description: "Jugador competitivo buscando team",
-            games: [
-                ("Valorant", "Inmortal"),
-                ("CS2", "Águila")
-            ],
-            profileImage: "TerroristTestIcon"
-        ),
-        User(
-            name: "Saten",
-            age: 24,
-            gender: "Mujer",
-            description: "Hola me llamo Saten soy maja",
-            games: [
-                ("Valorant", "Inmortal"),
-                ("CS2", "Águila")
-            ],
-            profileImage: "CatTestIcon"
-        ),
-        User(
-            name: "Marc",
-            age: 20,
-            gender: "Hombre",
-            description: "Mejor player del wow españa",
-            games: [
-                ("WoW", "2900"),
-                ("CS2", "Águila")
-            ],
-            profileImage: "DogTestIcon"
-        )
-    ]
-    
     init() {
         Task {
-            await loadUsers()
+            await loadMatchingUsers()
         }
     }
     
     @MainActor
-    func loadUsers() async {
+    func loadMatchingUsers() async {
         isLoading = true
-        
         do {
-            // Get current user
-            guard let currentUser = authManager.currentUser else {
-                users = []
-                isLoading = false
-                return
+            // Usar la URL base desde las variables de entorno o un valor por defecto
+            let baseURL = "http://localhost:3000"
+            guard let url = URL(string: "\(baseURL)/api/users/matching?userId=\(currentUserId)") else {
+                throw URLError(.badURL)
             }
             
-            // Get matching users
-            let matchingUsers = try await mongoManager.getMatchingUsers(userId: currentUser.id)
+            let (data, _) = try await URLSession.shared.data(from: url)
+            let decodedUsers = try JSONDecoder().decode([MatchingUser].self, from: data)
             
-            // Update UI with matching users
-            users = matchingUsers
+            self.users = decodedUsers.map { matchingUser in
+                User(
+                    id: String(matchingUser.id),
+                    name: matchingUser.name,
+                    age: matchingUser.age,
+                    gender: "Not specified",
+                    description: matchingUser.description,
+                    games: matchingUser.games.map { ($0.nombre, $0.rango) },
+                    profileImage: matchingUser.profileImage,
+                    matchPercentage: matchingUser.matchPercentage,
+                    commonGames: matchingUser.commonGames.map { game in
+                        CommonGame(
+                            name: game.nombre,
+                            myRank: game.miRango,
+                            theirRank: game.suRango
+                        )
+                    }
+                )
+            }
             isLoading = false
-            
         } catch {
-            print("Error loading users: \(error)")
-            users = []
+            errorMessage = "Error loading users: \(error.localizedDescription)"
             isLoading = false
-        }
-    }
-    
-    func likeUser(_ userId: String) async {
-        do {
-            let url = URL(string: "http://localhost:3000/like-user")!
-            var request = URLRequest(url: url)
-            request.httpMethod = "POST"
-            request.setValue("application/json", forHTTPHeaderField: "Content-Type")
-            
-            let body = [
-                "userId": currentUserId,
-                "likedUserId": userId
-            ]
-            
-            request.httpBody = try JSONSerialization.data(withJSONObject: body)
-            
-            let (_, response) = try await URLSession.shared.data(for: request)
-            
-            guard let httpResponse = response as? HTTPURLResponse else {
-                throw NSError(domain: "MainScreenViewModel", code: -1, userInfo: [NSLocalizedDescriptionKey: "Invalid response"])
-            }
-            
-            if httpResponse.statusCode != 200 {
-                throw NSError(domain: "MainScreenViewModel", code: httpResponse.statusCode, userInfo: [NSLocalizedDescriptionKey: "Failed to like user"])
-            }
-            
-        } catch {
-            errorMessage = error.localizedDescription
         }
     }
     
     func dislikeUser() {
-        guard currentIndex < users.count else { return }
-        currentIndex += 1
+        if currentIndex < users.count {
+            withAnimation {
+                currentIndex += 1
+            }
+        }
+    }
+    
+    func likeUser(_ userId: String) async {
+        // Implementar lógica de like aquí
+        if currentIndex < users.count {
+            withAnimation {
+                currentIndex += 1
+            }
+        }
     }
     
     // Esta función se usará cuando implementemos la base de datos
@@ -145,4 +82,34 @@ class MainScreenViewModel: ObservableObject {
         // Por ejemplo:
         // DatabaseManager.shared.saveMatch(currentUser: currentUser, matchedUser: user)
     }
+}
+
+// Modelos para decodificar la respuesta del servidor
+struct MatchingUser: Codable {
+    let id: Int
+    let name: String
+    let profileImage: String
+    let games: [GameInfo]
+    let age: Int
+    let region: String
+    let description: String
+    let matchPercentage: Int
+    let commonGames: [CommonGameInfo]
+}
+
+struct GameInfo: Codable {
+    let nombre: String
+    let rango: String
+}
+
+struct CommonGameInfo: Codable {
+    let nombre: String
+    let miRango: String
+    let suRango: String
+}
+
+struct CommonGame {
+    let name: String
+    let myRank: String
+    let theirRank: String
 }

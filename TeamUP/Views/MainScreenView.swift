@@ -186,143 +186,136 @@ struct CardView: View {
         let isIPad = UIDevice.current.userInterfaceIdiom == .pad
         
         if isIPad {
-            // En iPad, usamos un tamaño más pequeño y proporcional
             return min(screenWidth - 80, screenHeight * 0.6)
         } else {
-            // En iPhone mantenemos el tamaño original
             return screenWidth - 40
         }
     }
     
     var body: some View {
-        ZStack {
-            VStack(spacing: 0) {
-                // Imagen del usuario
-                if user.profileImage.starts(with: "http") {
-                    AsyncImage(url: URL(string: user.profileImage)) { image in
-                        image
-                            .resizable()
-                            .aspectRatio(contentMode: .fill)
-                            .frame(width: cardWidth, height: cardWidth)
-                            .clipped()
-                    } placeholder: {
-                        Image(systemName: "person.circle.fill")
-                            .resizable()
-                            .aspectRatio(contentMode: .fit)
-                            .frame(width: cardWidth, height: cardWidth)
-                            .foregroundColor(.gray)
-                    }
-                } else {
-                    Image(user.profileImage)
-                        .resizable()
-                        .aspectRatio(contentMode: .fill)
-                        .frame(width: cardWidth, height: cardWidth)
-                        .clipped()
-                }
+        VStack(spacing: 0) {
+            // Imagen de perfil y nombre
+            ZStack(alignment: .bottom) {
+                Image(user.profileImage)
+                    .resizable()
+                    .aspectRatio(contentMode: .fill)
+                    .frame(width: cardWidth, height: cardWidth)
+                    .clipped()
+                
+                // Gradiente para el texto
+                LinearGradient(
+                    gradient: Gradient(colors: [.clear, .black.opacity(0.8)]),
+                    startPoint: .top,
+                    endPoint: .bottom
+                )
+                .frame(height: 100)
                 
                 // Información del usuario
-                VStack(alignment: .leading, spacing: 15) {
-                    // Nombre y edad
-                    HStack(spacing: 8) {
-                        Button(action: {
-                            onNameTap(user)
-                        }) {
-                            Text(user.name)
-                                .font(.system(size: 26, weight: .bold))
-                                .foregroundColor(.primary)
+                VStack(alignment: .leading, spacing: 4) {
+                    HStack {
+                        Button(action: { onNameTap(user) }) {
+                            Text("\(user.name), \(user.age)")
+                                .font(.title2)
+                                .fontWeight(.bold)
+                                .foregroundColor(.white)
                         }
-                        Text("\(user.age)")
-                            .font(.system(size: 24))
-                            .foregroundColor(.gray)
+                        
+                        // Porcentaje de coincidencia
+                        Text("\(user.matchPercentage)% Match")
+                            .font(.system(size: 16, weight: .semibold))
+                            .foregroundColor(.white)
+                            .padding(.horizontal, 8)
+                            .padding(.vertical, 4)
+                            .background(Color(red: 0.9, green: 0.3, blue: 0.2))
+                            .cornerRadius(12)
                     }
-                    .padding(.top, 15)
-                    .padding(.leading, 15)
                     
-                    // Juegos y rangos
-                    VStack(alignment: .leading, spacing: 12) {
-                        ForEach(user.games, id: \.0) { game in
-                            HStack(spacing: 8) {
-                                Text(game.0)
-                                    .font(.system(size: 17, weight: .medium))
-                                Text("•")
-                                    .foregroundColor(.gray)
-                                Text(game.1)
-                                    .font(.system(size: 17))
-                                    .foregroundColor(Color(red: 0.9, green: 0.3, blue: 0.2))
-                            }
-                            .padding(.horizontal, 16)
-                            .padding(.vertical, 8)
-                            .background(
-                                RoundedRectangle(cornerRadius: 12)
-                                    .fill(Color(.systemGray6))
-                            )
-                        }
+                    if !user.description.isEmpty {
+                        Text(user.description)
+                            .font(.subheadline)
+                            .foregroundColor(.white)
+                            .lineLimit(2)
                     }
-                    .padding(.leading, 15)
-                    .padding(.bottom, 15)
                 }
-                .frame(width: cardWidth, alignment: .leading)
-                .background(Color(.systemBackground))
+                .padding()
             }
-            .frame(width: cardWidth)
-            .clipShape(RoundedRectangle(cornerRadius: 20))
-            .shadow(radius: 8)
-            .offset(x: offset.width, y: 0)
-            .rotationEffect(.degrees(Double(offset.width / 40)))
-            .gesture(
-                DragGesture()
-                    .onChanged { gesture in
-                        offset = gesture.translation
-                        withAnimation {
-                            color = offset.width > 0 ? .green : .red
-                        }
-                    }
-                    .onEnded { _ in
-                        withAnimation(.spring()) {
-                            if offset.width > 120 {
-                                offset.width = 500
-                                onLike()
-                            } else if offset.width < -120 {
-                                offset.width = -500
-                                onDislike()
-                            } else {
-                                offset = .zero
-                                color = .black
-                            }
-                        }
-                    }
-            )
             
-            // Indicadores de Like/Dislike
-            HStack {
-                Text("NOPE")
-                    .font(.system(size: 20, weight: .bold))
-                    .padding(.horizontal, 12)
-                    .padding(.vertical, 8)
-                    .overlay(
-                        RoundedRectangle(cornerRadius: 12)
-                            .stroke(Color.red, lineWidth: 2)
-                    )
-                    .rotationEffect(.degrees(-30))
-                    .opacity(offset.width < -20 ? 1 : 0)
+            // Juegos en común
+            VStack(alignment: .leading, spacing: 12) {
+                Text("Juegos en común")
+                    .font(.headline)
+                    .padding(.horizontal)
+                    .padding(.top, 12)
                 
-                Spacer()
-                
-                Text("LIKE")
-                    .font(.system(size: 20, weight: .bold))
-                    .padding(.horizontal, 12)
-                    .padding(.vertical, 8)
-                    .overlay(
-                        RoundedRectangle(cornerRadius: 12)
-                            .stroke(Color(red: 0.9, green: 0.3, blue: 0.2), lineWidth: 2)
-                    )
-                    .rotationEffect(.degrees(30))
-                    .opacity(offset.width > 20 ? 1 : 0)
+                ScrollView(.horizontal, showsIndicators: false) {
+                    HStack(spacing: 16) {
+                        ForEach(user.commonGames, id: \.name) { game in
+                            VStack(alignment: .leading, spacing: 4) {
+                                Text(game.name)
+                                    .font(.system(size: 16, weight: .semibold))
+                                
+                                HStack {
+                                    VStack(alignment: .leading) {
+                                        Text("Tu rango")
+                                            .font(.caption)
+                                            .foregroundColor(.gray)
+                                        Text(game.myRank)
+                                            .font(.system(size: 14, weight: .medium))
+                                    }
+                                    
+                                    Divider()
+                                        .frame(height: 24)
+                                        .padding(.horizontal, 8)
+                                    
+                                    VStack(alignment: .leading) {
+                                        Text("Su rango")
+                                            .font(.caption)
+                                            .foregroundColor(.gray)
+                                        Text(game.theirRank)
+                                            .font(.system(size: 14, weight: .medium))
+                                    }
+                                }
+                            }
+                            .padding(12)
+                            .background(Color(.systemGray6))
+                            .cornerRadius(12)
+                        }
+                    }
+                    .padding(.horizontal)
+                }
+                .padding(.bottom, 12)
             }
-            .foregroundColor(color)
-            .padding(.horizontal, 40)
-            .padding(.top, 40)
+            .background(Color(.systemBackground))
         }
+        .frame(width: cardWidth)
+        .background(Color(.systemBackground))
+        .cornerRadius(20)
+        .shadow(radius: 5)
+        .offset(x: offset.width * 1.2, y: 0)
+        .rotationEffect(.degrees(Double(offset.width / 40)))
+        .gesture(
+            DragGesture()
+                .onChanged { gesture in
+                    offset = gesture.translation
+                    withAnimation {
+                        color = offset.width > 0 ? .green : .red
+                    }
+                }
+                .onEnded { _ in
+                    withAnimation(.spring()) {
+                        if offset.width > 120 {
+                            offset.width = 500
+                            onLike()
+                        } else if offset.width < -120 {
+                            offset.width = -500
+                            onDislike()
+                        } else {
+                            offset = .zero
+                            color = .black
+                        }
+                    }
+                }
+        )
     }
 }
 

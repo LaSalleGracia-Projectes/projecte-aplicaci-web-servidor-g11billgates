@@ -154,6 +154,21 @@ function validarElo(elo) {
     return Number.isInteger(elo) && elo >= 0 && elo <= 3000;
 }
 
+// Definir rangos válidos por juego
+const RANGOS_POR_JUEGO = {
+    'League of Legends': ['Hierro', 'Bronce', 'Plata', 'Oro', 'Platino', 'Diamante', 'Maestro', 'Gran Maestro', 'Desafiante'],
+    'Valorant': ['Hierro', 'Bronce', 'Plata', 'Oro', 'Platino', 'Diamante', 'Ascendente', 'Inmortal', 'Radiante'],
+    'Counter-Strike 2': ['Plata I', 'Plata II', 'Plata III', 'Plata IV', 'Plata Elite', 'Plata Elite Master', 'Nova I', 'Nova II', 'Nova III', 'Nova Master', 'AK I', 'AK II', 'AK Cruz', 'Águila I', 'Águila II', 'Águila Master', 'Supremo', 'Global Elite'],
+    'Fortnite': ['Bronce', 'Plata', 'Oro', 'Platino', 'Diamante', 'Champion', 'Unreal']
+};
+
+// Función para validar rangos
+function validarRango(juego, rango) {
+    const rangosValidos = RANGOS_POR_JUEGO[juego];
+    if (!rangosValidos) return false;
+    return rangosValidos.includes(rango);
+}
+
 // Database initialization functions
 async function crearColecciones(database) {
   const colecciones = [
@@ -672,23 +687,41 @@ app.post('/register', async (req, res) => {
         const saltRounds = 10;
         const hashedPassword = await bcrypt.hash(Contraseña, saltRounds);
 
-        // Format games array
+        // Format games array with validation
         let formattedGames = [];
         if (Juegos && Array.isArray(Juegos)) {
             formattedGames = Juegos.map(game => {
                 // Si el juego viene como objeto {nombre, rango}
                 if (game && typeof game === 'object') {
+                    const nombreJuego = game.nombre || '';
+                    const rango = game.rango || '';
+                    
+                    // Validar el rango
+                    if (!validarRango(nombreJuego, rango)) {
+                        console.error(`Rango inválido para ${nombreJuego}: ${rango}`);
+                        return null;
+                    }
+                    
                     return {
-                        nombre: game.nombre || '',
-                        rango: game.rango || 'Principiante',
+                        nombre: nombreJuego,
+                        rango: rango,
                         addedAt: new Date()
                     };
                 }
                 // Si el juego viene como array [nombre, rango]
                 else if (Array.isArray(game)) {
+                    const nombreJuego = game[0] || '';
+                    const rango = game[1] || '';
+                    
+                    // Validar el rango
+                    if (!validarRango(nombreJuego, rango)) {
+                        console.error(`Rango inválido para ${nombreJuego}: ${rango}`);
+                        return null;
+                    }
+                    
                     return {
-                        nombre: game[0] || '',
-                        rango: game[1] || 'Principiante',
+                        nombre: nombreJuego,
+                        rango: rango,
                         addedAt: new Date()
                     };
                 }
@@ -1612,18 +1645,19 @@ app.get('/api/users/matching', async (req, res) => {
 
         // Calcular el porcentaje de coincidencia y obtener rangos en común
         const usersWithMatchPercentage = matchingUsers.map(user => {
-            const userGameNames = new Set(user.Juegos.map(g => g.nombre));
-            const commonGames = [...userGameNames].filter(name => userGameNames.has(name));
+            // Obtener los juegos en común
+            const commonGames = user.Juegos.filter(game => userGameNames.has(game.nombre));
+            
+            // Calcular el porcentaje de coincidencia
             const matchPercentage = (commonGames.length / userGames.length) * 100;
 
-            // Obtener rangos en común para cada juego
-            const commonGamesWithRanks = commonGames.map(gameName => {
-                const currentUserGame = userGames.find(g => g.nombre === gameName);
-                const otherUserGame = user.Juegos.find(g => g.nombre === gameName);
+            // Obtener información detallada de los juegos en común
+            const commonGamesWithRanks = commonGames.map(game => {
+                const currentUserGame = userGames.find(g => g.nombre === game.nombre);
                 return {
-                    nombre: gameName,
+                    nombre: game.nombre,
                     miRango: currentUserGame.rango,
-                    suRango: otherUserGame.rango
+                    suRango: game.rango
                 };
             });
 
@@ -1643,7 +1677,7 @@ app.get('/api/users/matching', async (req, res) => {
             };
         });
 
-        // Ordenar por porcentaje de coincidencia
+        // Ordenar por porcentaje de coincidencia (mayor a menor)
         const sortedUsers = usersWithMatchPercentage.sort((a, b) => b.matchPercentage - a.matchPercentage);
 
         res.json(sortedUsers);

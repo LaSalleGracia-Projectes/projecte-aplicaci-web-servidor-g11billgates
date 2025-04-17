@@ -5,104 +5,85 @@ struct MatchView: View {
     @Binding var isShowing: Bool
     
     var body: some View {
-        ZStack {
-            // Fondo semi-transparente
-            Color.black.opacity(0.8)
-                .edgesIgnoringSafeArea(.all)
+        VStack(spacing: 20) {
+            // Encabezado
+            Text("¡Es un Match!")
+                .font(.system(size: 32, weight: .bold))
+                .foregroundColor(Color(red: 0.9, green: 0.3, blue: 0.2))
             
-            VStack(spacing: 20) {
-                // Título
-                Text("¡Es un Match!")
-                    .font(.system(size: 32, weight: .bold))
-                    .foregroundColor(.white)
+            // Imágenes de perfil
+            HStack(spacing: 20) {
+                Image(matchedUser.profileImage)
+                    .resizable()
+                    .aspectRatio(contentMode: .fill)
+                    .frame(width: 120, height: 120)
+                    .clipShape(Circle())
+                    .overlay(Circle().stroke(Color(red: 0.9, green: 0.3, blue: 0.2), lineWidth: 4))
+            }
+            
+            // Información del usuario
+            Text(matchedUser.name)
+                .font(.title2)
+                .fontWeight(.semibold)
+            
+            // Juegos en común
+            VStack(alignment: .leading, spacing: 8) {
+                Text("Juegos en común:")
+                    .font(.headline)
                 
-                // Imágenes de perfil
-                HStack(spacing: 20) {
-                    if matchedUser.profileImage.starts(with: "http") {
-                        AsyncImage(url: URL(string: matchedUser.profileImage)) { image in
-                            image
-                                .resizable()
-                                .aspectRatio(contentMode: .fill)
-                                .frame(width: 120, height: 120)
-                                .clipShape(Circle())
-                        } placeholder: {
-                            Image(systemName: "person.circle.fill")
-                                .resizable()
-                                .frame(width: 120, height: 120)
-                                .foregroundColor(.gray)
-                        }
-                    } else {
-                        Image(matchedUser.profileImage)
-                            .resizable()
-                            .aspectRatio(contentMode: .fill)
-                            .frame(width: 120, height: 120)
-                            .clipShape(Circle())
+                ForEach(matchedUser.commonGames, id: \.name) { game in
+                    HStack {
+                        Text(game.name)
+                            .font(.system(size: 16, weight: .medium))
+                        Spacer()
+                        Text("\(game.myRank) vs \(game.theirRank)")
+                            .font(.system(size: 14))
+                            .foregroundColor(.gray)
                     }
-                }
-                
-                // Nombre del usuario
-                Text(matchedUser.name)
-                    .font(.system(size: 24, weight: .semibold))
-                    .foregroundColor(.white)
-                
-                // Juegos en común
-                VStack(alignment: .leading, spacing: 8) {
-                    ForEach(matchedUser.games, id: \.0) { game in
-                        HStack {
-                            Text(game.0)
-                                .font(.system(size: 16, weight: .medium))
-                            Text("•")
-                                .foregroundColor(.gray)
-                            Text(game.1)
-                                .font(.system(size: 16))
-                                .foregroundColor(Color(red: 0.9, green: 0.3, blue: 0.2))
-                        }
-                        .padding(.horizontal, 16)
-                        .padding(.vertical, 8)
-                        .background(
-                            RoundedRectangle(cornerRadius: 12)
-                                .fill(Color(.systemGray6))
-                        )
-                    }
-                }
-                
-                // Botones
-                HStack(spacing: 20) {
-                    Button(action: {
-                        isShowing = false
-                    }) {
-                        Text("Seguir buscando")
-                            .font(.system(size: 18, weight: .semibold))
-                            .foregroundColor(.white)
-                            .padding(.vertical, 12)
-                            .padding(.horizontal, 24)
-                            .background(Color(red: 0.9, green: 0.3, blue: 0.2))
-                            .cornerRadius(25)
-                    }
-                    
-                    NavigationLink(destination: ChatView(
-                        chatId: UUID().uuidString,
-                        userId: matchedUser.id,
-                        userAge: matchedUser.age,
-                        reportedUserId: matchedUser.id
-                    )) {
-                        Text("Enviar mensaje")
-                            .font(.system(size: 18, weight: .semibold))
-                            .foregroundColor(.white)
-                            .padding(.vertical, 12)
-                            .padding(.horizontal, 24)
-                            .background(Color(red: 0.3, green: 0.8, blue: 0.4))
-                            .cornerRadius(25)
-                    }
+                    .padding(.horizontal)
                 }
             }
-            .padding(32)
-            .background(Color(.systemBackground).opacity(0.9))
-            .cornerRadius(20)
-            .shadow(radius: 10)
+            .padding()
+            .background(Color(.systemGray6))
+            .cornerRadius(12)
+            .padding(.horizontal)
+            
+            // Porcentaje de coincidencia
+            Text("\(matchedUser.matchPercentage)% de coincidencia")
+                .font(.headline)
+                .foregroundColor(Color(red: 0.9, green: 0.3, blue: 0.2))
+            
+            // Botones
+            VStack(spacing: 12) {
+                Button(action: {
+                    // Implementar lógica para enviar mensaje
+                }) {
+                    Text("Enviar mensaje")
+                        .font(.headline)
+                        .foregroundColor(.white)
+                        .frame(maxWidth: .infinity)
+                        .padding()
+                        .background(Color(red: 0.9, green: 0.3, blue: 0.2))
+                        .cornerRadius(12)
+                }
+                
+                Button(action: {
+                    isShowing = false
+                }) {
+                    Text("Continuar jugando")
+                        .font(.headline)
+                        .foregroundColor(Color(red: 0.9, green: 0.3, blue: 0.2))
+                        .frame(maxWidth: .infinity)
+                        .padding()
+                        .overlay(
+                            RoundedRectangle(cornerRadius: 12)
+                                .stroke(Color(red: 0.9, green: 0.3, blue: 0.2), lineWidth: 2)
+                        )
+                }
+            }
+            .padding(.horizontal)
         }
-        .transition(.opacity)
-        .animation(.easeInOut, value: isShowing)
+        .padding()
     }
 }
 
