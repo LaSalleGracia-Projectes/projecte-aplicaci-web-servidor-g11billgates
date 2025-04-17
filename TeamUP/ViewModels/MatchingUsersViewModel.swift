@@ -1,11 +1,56 @@
 import Foundation
+import SwiftUI
 
 class MatchingUsersViewModel: ObservableObject {
     @Published var matchingUsers: [MatchingUser] = []
     @Published var isLoading = false
     @Published var errorMessage: String?
     
-    private let baseURL = "http://localhost:3000"
+    init() {
+        loadMockUsers()
+    }
+    
+    private func loadMockUsers() {
+        let mockUsers = [
+            MatchingUser(
+                id: 1,
+                name: "Usuario 1",
+                profileImage: "default_profile",
+                games: [
+                    MatchingUser.Game(nombre: "League of Legends", rango: "Oro"),
+                    MatchingUser.Game(nombre: "Valorant", rango: "Plata")
+                ],
+                age: 25,
+                gender: "Hombre",
+                region: "Europa",
+                description: "Jugador casual",
+                matchPercentage: 80,
+                commonGames: [
+                    MatchingUser.CommonGame(nombre: "League of Legends", miRango: "Oro", suRango: "Plata"),
+                    MatchingUser.CommonGame(nombre: "Valorant", miRango: "Plata", suRango: "Oro")
+                ]
+            ),
+            MatchingUser(
+                id: 2,
+                name: "Usuario 2",
+                profileImage: "default_profile",
+                games: [
+                    MatchingUser.Game(nombre: "League of Legends", rango: "Diamante"),
+                    MatchingUser.Game(nombre: "Overwatch 2", rango: "Máster")
+                ],
+                age: 30,
+                gender: "Mujer",
+                region: "América",
+                description: "Jugadora competitiva",
+                matchPercentage: 75,
+                commonGames: [
+                    MatchingUser.CommonGame(nombre: "League of Legends", miRango: "Diamante", suRango: "Platino")
+                ]
+            )
+        ]
+        
+        self.matchingUsers = mockUsers
+    }
     
     struct MatchingUser: Decodable, Identifiable {
         let id: Int
@@ -13,7 +58,8 @@ class MatchingUsersViewModel: ObservableObject {
         let profileImage: String
         let games: [Game]
         let age: Int
-        let region: String
+        let gender: String?
+        let region: String?
         let description: String
         let matchPercentage: Int
         let commonGames: [CommonGame]
@@ -28,50 +74,5 @@ class MatchingUsersViewModel: ObservableObject {
             let miRango: String
             let suRango: String
         }
-    }
-    
-    func fetchMatchingUsers(userId: Int) {
-        isLoading = true
-        errorMessage = nil
-        
-        guard let url = URL(string: "\(baseURL)/api/users/matching?userId=\(userId)") else {
-            errorMessage = "URL inválida"
-            isLoading = false
-            return
-        }
-        
-        print("Fetching users from: \(url.absoluteString)")
-        
-        URLSession.shared.dataTask(with: url) { [weak self] data, response, error in
-            DispatchQueue.main.async {
-                self?.isLoading = false
-                
-                if let error = error {
-                    self?.errorMessage = "Error de red: \(error.localizedDescription)"
-                    print("Network error: \(error.localizedDescription)")
-                    return
-                }
-                
-                guard let data = data else {
-                    self?.errorMessage = "No se recibieron datos"
-                    print("No data received")
-                    return
-                }
-                
-                // Print the raw response for debugging
-                if let jsonString = String(data: data, encoding: .utf8) {
-                    print("Raw response: \(jsonString)")
-                }
-                
-                do {
-                    let users = try JSONDecoder().decode([MatchingUser].self, from: data)
-                    print("Successfully decoded \(users.count) users")
-                    self?.matchingUsers = users
-                } catch {
-                    self?.errorMessage = "Error al decodificar los datos: \(error.localizedDescription)"
-                    print("Decoding error: \(error)")
-                }
-            }
-        }.resume()
     }
 } 

@@ -5,58 +5,52 @@ class MainScreenViewModel: ObservableObject {
     @Published var users: [User] = []
     @Published var showMatch = false
     @Published var matchedUser: User?
-    @Published var isLoading = true
+    @Published var isLoading = false
     @Published var errorMessage: String?
     
-    private let mongoManager = MongoDBManager.shared
-    private let authManager = AuthenticationManager.shared
-    private var currentUserId: String {
-        authManager.currentUser?.id ?? ""
-    }
-    
     init() {
-        Task {
-            await loadMatchingUsers()
-        }
+        // Usar datos de prueba temporalmente
+        loadMockUsers()
     }
     
-    @MainActor
-    func loadMatchingUsers() async {
-        isLoading = true
-        do {
-            // Usar la URL base desde las variables de entorno o un valor por defecto
-            let baseURL = "http://localhost:3000"
-            guard let url = URL(string: "\(baseURL)/api/users/matching?userId=\(currentUserId)") else {
-                throw URLError(.badURL)
-            }
-            
-            let (data, _) = try await URLSession.shared.data(from: url)
-            let decodedUsers = try JSONDecoder().decode([MatchingUser].self, from: data)
-            
-            self.users = decodedUsers.map { matchingUser in
-                User(
-                    id: String(matchingUser.id),
-                    name: matchingUser.name,
-                    age: matchingUser.age,
-                    gender: "Not specified",
-                    description: matchingUser.description,
-                    games: matchingUser.games.map { ($0.nombre, $0.rango) },
-                    profileImage: matchingUser.profileImage,
-                    matchPercentage: matchingUser.matchPercentage,
-                    commonGames: matchingUser.commonGames.map { game in
-                        CommonGame(
-                            name: game.nombre,
-                            myRank: game.miRango,
-                            theirRank: game.suRango
-                        )
-                    }
-                )
-            }
-            isLoading = false
-        } catch {
-            errorMessage = "Error loading users: \(error.localizedDescription)"
-            isLoading = false
-        }
+    private func loadMockUsers() {
+        let mockUsers = [
+            User(
+                id: "1",
+                name: "Usuario 1",
+                age: 25,
+                gender: "Hombre",
+                description: "Jugador casual",
+                games: [
+                    Game(nombre: "League of Legends", rango: "Oro"),
+                    Game(nombre: "Valorant", rango: "Plata")
+                ],
+                profileImage: "default_profile",
+                matchPercentage: 80,
+                commonGames: [
+                    UserCommonGame(name: "League of Legends", userRank: "Oro", otherUserRank: "Plata"),
+                    UserCommonGame(name: "Valorant", userRank: "Plata", otherUserRank: "Oro")
+                ]
+            ),
+            User(
+                id: "2",
+                name: "Usuario 2",
+                age: 30,
+                gender: "Mujer",
+                description: "Jugadora competitiva",
+                games: [
+                    Game(nombre: "League of Legends", rango: "Diamante"),
+                    Game(nombre: "Overwatch 2", rango: "Máster")
+                ],
+                profileImage: "default_profile",
+                matchPercentage: 75,
+                commonGames: [
+                    UserCommonGame(name: "League of Legends", userRank: "Diamante", otherUserRank: "Platino")
+                ]
+            )
+        ]
+        
+        self.users = mockUsers
     }
     
     func dislikeUser() {
@@ -68,7 +62,6 @@ class MainScreenViewModel: ObservableObject {
     }
     
     func likeUser(_ userId: String) async {
-        // Implementar lógica de like aquí
         if currentIndex < users.count {
             withAnimation {
                 currentIndex += 1
@@ -91,7 +84,8 @@ struct MatchingUser: Codable {
     let profileImage: String
     let games: [GameInfo]
     let age: Int
-    let region: String
+    let gender: String?
+    let region: String?
     let description: String
     let matchPercentage: Int
     let commonGames: [CommonGameInfo]
@@ -106,10 +100,4 @@ struct CommonGameInfo: Codable {
     let nombre: String
     let miRango: String
     let suRango: String
-}
-
-struct CommonGame {
-    let name: String
-    let myRank: String
-    let theirRank: String
 }
