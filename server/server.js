@@ -647,12 +647,12 @@ app.post('/login', async (req, res) => {
 // Register endpoint
 app.post('/register', async (req, res) => {
     try {
-        const { Nombre, Correo, Contraseña, FotoPerfil, Edad, Region, Descripcion, Juegos, Genero } = req.body;
+        const { Nombre, Correo, Contraseña, Juegos } = req.body;
         
         console.log('Datos recibidos en registro:', {
             Nombre,
             Correo,
-            Juegos // Log para ver qué juegos se reciben
+            Juegos
         });
 
         const database = client.db(dbName);
@@ -672,60 +672,45 @@ app.post('/register', async (req, res) => {
         const saltRounds = 10;
         const hashedPassword = await bcrypt.hash(Contraseña, saltRounds);
 
-        // Format games array - Asegurando que los juegos tengan la estructura correcta con rangos
+        // Format games array
         let formattedGames = [];
-        
         if (Juegos && Array.isArray(Juegos)) {
             formattedGames = Juegos.map(game => {
+                // Si el juego viene como objeto {nombre, rango}
+                if (game && typeof game === 'object') {
+                    return {
+                        nombre: game.nombre || '',
+                        rango: game.rango || 'Principiante',
+                        addedAt: new Date()
+                    };
+                }
                 // Si el juego viene como array [nombre, rango]
-                if (Array.isArray(game) && game.length >= 2) {
+                else if (Array.isArray(game)) {
                     return {
                         nombre: game[0] || '',
                         rango: game[1] || 'Principiante',
                         addedAt: new Date()
                     };
                 }
-                // Si el juego viene como objeto {nombre, rango}
-                else if (game && typeof game === 'object') {
-                    return {
-                        nombre: game.nombre || game.name || '',
-                        rango: game.rango || game.rank || 'Principiante',
-                        addedAt: new Date()
-                    };
-                }
                 return null;
-            }).filter(game => game !== null && game.nombre); // Filtrar juegos inválidos
+            }).filter(game => game !== null && game.nombre);
         }
 
         console.log('Juegos formateados:', formattedGames);
 
-        // Create user document with all fields
+        // Create user document
         const userDocument = {
             IDUsuario: Number(IDUsuario),
-            Nombre: String(Nombre || ''),
-            Correo: String(Correo || ''),
+            Nombre: String(Nombre),
+            Correo: String(Correo),
             Contraseña: hashedPassword,
-            FotoPerfil: FotoPerfil ? String(FotoPerfil) : "default_profile",
-            Edad: Edad ? Number(Edad) : 18,
-            Region: Region ? String(Region) : "Not specified",
-            Descripcion: Descripcion ? String(Descripcion) : "¡Hola! Me gusta jugar videojuegos.",
+            FotoPerfil: "default_profile",
+            Edad: 18,
+            Region: "Not specified",
+            Descripcion: "¡Hola! Me gusta jugar videojuegos.",
             Juegos: formattedGames,
-            Genero: Genero ? String(Genero) : "Not specified"
+            Genero: "Not specified"
         };
-
-        // Validate required fields
-        if (!userDocument.Nombre || !userDocument.Correo || !Contraseña) {
-            return res.status(400).json({ 
-                error: 'Missing required fields',
-                required: ['Nombre', 'Correo', 'Contraseña']
-            });
-        }
-
-        console.log('Intentando registrar usuario:', {
-            ...userDocument,
-            Contraseña: '[PROTECTED]',
-            Juegos: formattedGames
-        });
 
         // Insert the user
         const result = await usuarios.insertOne(userDocument);
@@ -734,7 +719,7 @@ app.post('/register', async (req, res) => {
             res.status(201).json({
                 message: 'User registered successfully',
                 userId: result.insertedId,
-                juegos: formattedGames // Incluir los juegos en la respuesta
+                juegos: formattedGames
             });
         } else {
             res.status(500).json({ error: 'Failed to register user' });
@@ -1605,18 +1590,17 @@ app.get('/api/users/matching', async (req, res) => {
         const userGameNames = new Set(userGames.map(game => game.nombre));
 
         // Buscar usuarios que tengan al menos un juego en común
-        const potentialMatches = await database.collection('usuario')
+        const matchingUsers = await database.collection('usuario')
             .find({
-                _id: { $ne: new ObjectId(userId) },
+                IDUsuario: { $ne: parseInt(userId) }, // Excluir al usuario actual
                 Juegos: {
                     $elemMatch: {
-                        nombre: { $in: [...userGameNames] },
-                        rango: { $exists: true, $ne: null }
+                        nombre: { $in: [...userGameNames] }
                     }
                 }
             })
             .project({
-                _id: 1,
+                IDUsuario: 1,
                 Nombre: 1,
                 FotoPerfil: 1,
                 Juegos: 1,
@@ -1626,42 +1610,45 @@ app.get('/api/users/matching', async (req, res) => {
             })
             .toArray();
 
-        // Filtrar usuarios que tengan exactamente los mismos juegos
-        const matchingUsers = potentialMatches.filter(user => {
-            // Verificar que tengan exactamente el mismo número de juegos
-            if (user.Juegos.length !== userGames.length) {
-                return false;
-            }
+        // Calcular el porcentaje de coincidencia y obtener rangos en común
+        const usersWithMatchPercentage = matchingUsers.map(user => {
+            const userGameNames = new Set(user.Juegos.map(g => g.nombre));
+            const commonGames = [...userGameNames].filter(name => userGameNames.has(name));
+            const matchPercentage = (commonGames.length / userGames.length) * 100;
 
-            // Crear conjuntos de nombres de juegos para comparación
-            const userGameSet = new Set(user.Juegos.map(g => g.nombre));
-            const currentUserGameSet = new Set(userGames.map(g => g.nombre));
+            // Obtener rangos en común para cada juego
+            const commonGamesWithRanks = commonGames.map(gameName => {
+                const currentUserGame = userGames.find(g => g.nombre === gameName);
+                const otherUserGame = user.Juegos.find(g => g.nombre === gameName);
+                return {
+                    nombre: gameName,
+                    miRango: currentUserGame.rango,
+                    suRango: otherUserGame.rango
+                };
+            });
 
-            // Verificar que todos los juegos coincidan exactamente
-            const hasAllGames = [...userGameSet].every(name => currentUserGameSet.has(name));
-            const hasNoExtraGames = [...currentUserGameSet].every(name => userGameSet.has(name));
-
-            // Verificar que todos los juegos tengan rango definido
-            const allGamesHaveRank = user.Juegos.every(game => game.rango);
-
-            return hasAllGames && hasNoExtraGames && allGamesHaveRank;
+            return {
+                id: user.IDUsuario,
+                name: user.Nombre,
+                profileImage: user.FotoPerfil || "default_profile",
+                games: user.Juegos.map(game => ({
+                    nombre: game.nombre,
+                    rango: game.rango
+                })),
+                age: user.Edad || 18,
+                region: user.Region || "Not specified",
+                description: user.Descripcion || "No description available",
+                matchPercentage: Math.round(matchPercentage),
+                commonGames: commonGamesWithRanks
+            };
         });
 
-        // Formatear los resultados
-        const formattedUsers = matchingUsers.map(user => ({
-            _id: user._id,
-            Nombre: user.Nombre,
-            FotoPerfil: user.FotoPerfil,
-            Juegos: user.Juegos,
-            Edad: user.Edad,
-            Region: user.Region,
-            Descripcion: user.Descripcion,
-            matchPercentage: 100
-        }));
+        // Ordenar por porcentaje de coincidencia
+        const sortedUsers = usersWithMatchPercentage.sort((a, b) => b.matchPercentage - a.matchPercentage);
 
-        res.json(formattedUsers);
+        res.json(sortedUsers);
     } catch (error) {
-        console.error('Error:', error);
+        console.error('Error al obtener usuarios con juegos en común:', error);
         res.status(500).json({ error: 'Error al obtener usuarios' });
     }
 });
@@ -1677,20 +1664,36 @@ app.post('/report-user', async (req, res) => {
 
         const database = client.db(dbName);
         const chats = database.collection('chat');
+        const mensajes = database.collection('mensaje');
         const reportes = database.collection('reportes');
+        const usuarios = database.collection('usuario');
 
-        // Eliminar el chat
-        const deleteResult = await chats.deleteOne({ _id: new ObjectId(chatId) });
+        // Marcar al usuario como reportado
+        await usuarios.updateOne(
+            { IDUsuario: Number(reportedUserId) },
+            { $set: { reportado: true, fechaReporte: new Date() } }
+        );
+
+        // Eliminar todos los mensajes del chat
+        await mensajes.deleteMany({ IDChat: Number(chatId) });
         
-        if (!deleteResult.deletedCount) {
-            return res.status(404).json({ error: 'Chat no encontrado' });
-        }
+        // En lugar de eliminar el chat, lo marcamos como oculto
+        await chats.updateOne(
+            { _id: Number(chatId) },
+            { 
+                $set: { 
+                    oculto: true,
+                    fechaOculto: new Date(),
+                    motivoOculto: 'reportado'
+                }
+            }
+        );
 
         // Crear el reporte
         const reporte = {
-            reporterId: userId,
-            reportedUserId: reportedUserId,
-            chatId: chatId,
+            reporterId: Number(userId),
+            reportedUserId: Number(reportedUserId),
+            chatId: Number(chatId),
             fecha: new Date(),
             estado: 'pendiente'
         };
@@ -1698,7 +1701,7 @@ app.post('/report-user', async (req, res) => {
         await reportes.insertOne(reporte);
 
         res.status(200).json({ 
-            message: 'Usuario reportado y chat eliminado exitosamente',
+            message: 'Usuario reportado y chat ocultado exitosamente',
             reporte: reporte
         });
 

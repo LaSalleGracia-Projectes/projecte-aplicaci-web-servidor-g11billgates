@@ -6,9 +6,13 @@ class MainScreenViewModel: ObservableObject {
     @Published var showMatch = false
     @Published var matchedUser: User?
     @Published var isLoading = true
+    @Published var errorMessage: String?
     
     private let mongoManager = MongoDBManager.shared
     private let authManager = AuthenticationManager.shared
+    private var currentUserId: String {
+        authManager.currentUser?.id ?? ""
+    }
     
     // Usuarios de prueba por defecto
     private let defaultUsers = [
@@ -101,13 +105,33 @@ class MainScreenViewModel: ObservableObject {
         }
     }
     
-    func likeUser() {
-        guard currentIndex < users.count else { return }
-        let likedUser = users[currentIndex]
-        currentIndex += 1
-        
-        // Aquí podrías implementar la lógica de match
-        // Por ahora solo avanzamos al siguiente usuario
+    func likeUser(_ userId: String) async {
+        do {
+            let url = URL(string: "http://localhost:3000/like-user")!
+            var request = URLRequest(url: url)
+            request.httpMethod = "POST"
+            request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+            
+            let body = [
+                "userId": currentUserId,
+                "likedUserId": userId
+            ]
+            
+            request.httpBody = try JSONSerialization.data(withJSONObject: body)
+            
+            let (_, response) = try await URLSession.shared.data(for: request)
+            
+            guard let httpResponse = response as? HTTPURLResponse else {
+                throw NSError(domain: "MainScreenViewModel", code: -1, userInfo: [NSLocalizedDescriptionKey: "Invalid response"])
+            }
+            
+            if httpResponse.statusCode != 200 {
+                throw NSError(domain: "MainScreenViewModel", code: httpResponse.statusCode, userInfo: [NSLocalizedDescriptionKey: "Failed to like user"])
+            }
+            
+        } catch {
+            errorMessage = error.localizedDescription
+        }
     }
     
     func dislikeUser() {

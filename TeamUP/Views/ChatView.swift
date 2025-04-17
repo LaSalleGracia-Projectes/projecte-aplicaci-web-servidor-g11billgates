@@ -16,9 +16,10 @@ struct ChatView: View {
     @Environment(\.presentationMode) var presentationMode
     @State private var showImagePicker = false
     @State private var showVideoPicker = false
+    @State private var showReportAlert = false
     
-    init(chatId: String, userId: String, userAge: Int) {
-        _viewModel = StateObject(wrappedValue: ChatViewModel(chatId: chatId, userId: userId, userAge: userAge))
+    init(chatId: String, userId: String, userAge: Int, reportedUserId: String) {
+        _viewModel = StateObject(wrappedValue: ChatViewModel(chatId: chatId, userId: userId, userAge: userAge, reportedUserId: reportedUserId))
     }
     
     var body: some View {
@@ -58,6 +59,17 @@ struct ChatView: View {
         } message: {
             Text("Debes ser mayor de 18 años para acceder al chat")
         }
+        .alert("Reportar usuario", isPresented: $showReportAlert) {
+            Button("Cancelar", role: .cancel) { }
+            Button("Reportar", role: .destructive) {
+                Task {
+                    await viewModel.reportUser()
+                    presentationMode.wrappedValue.dismiss()
+                }
+            }
+        } message: {
+            Text("¿Estás seguro de que quieres reportar a este usuario? Esta acción eliminará el chat y no podrás volver a hablar con él.")
+        }
     }
     
     private var headerView: some View {
@@ -78,6 +90,15 @@ struct ChatView: View {
                 .fontWeight(.semibold)
             
             Spacer()
+            
+            Button(action: {
+                showReportAlert = true
+            }) {
+                Image(systemName: "exclamationmark.triangle.fill")
+                    .font(.system(size: 20))
+                    .foregroundColor(.red)
+            }
+            .padding(.trailing)
         }
         .frame(height: 44)
         .background(Color(.systemBackground))
@@ -258,5 +279,5 @@ struct MessageBubble: View {
 }
 
 #Preview {
-    ChatView(chatId: "1", userId: "2", userAge: 25)
+    ChatView(chatId: "1", userId: "2", userAge: 25, reportedUserId: "3")
 }

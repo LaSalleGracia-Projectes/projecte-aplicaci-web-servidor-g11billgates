@@ -26,6 +26,14 @@ struct Game: Identifiable, Hashable {
         Game(
             name: "Dota 2",
             ranks: ["Heraldo", "Guardián", "Cruzado", "Arconte", "Leyenda", "Ancestral", "Divino", "Inmortal"]
+        ),
+        Game(
+            name: "Apex Legends",
+            ranks: ["Bronce", "Plata", "Oro", "Platino", "Diamante", "Master", "Predator"]
+        ),
+        Game(
+            name: "Fortnite",
+            ranks: ["Bronce", "Plata", "Oro", "Platino", "Diamante", "Champion", "Unreal"]
         )
     ]
     

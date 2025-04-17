@@ -23,12 +23,14 @@ class ChatViewModel: NSObject, ObservableObject {
     private let chatId: String
     private let userId: String
     private let userAge: Int
+    private let reportedUserId: String
     private var recordingTimer: Timer?
     
-    init(chatId: String, userId: String, userAge: Int) {
+    init(chatId: String, userId: String, userAge: Int, reportedUserId: String) {
         self.chatId = chatId
         self.userId = userId
         self.userAge = userAge
+        self.reportedUserId = reportedUserId
         super.init()
         loadMessages()
         setupAudioSession()
@@ -228,6 +230,45 @@ class ChatViewModel: NSObject, ObservableObject {
         let formatter = DateFormatter()
         formatter.dateFormat = "HH:mm"
         return formatter.string(from: Date())
+    }
+    
+    func reportUser() async {
+        isLoading = true
+        do {
+            let url = URL(string: "http://localhost:3000/report-user")!
+            var request = URLRequest(url: url)
+            request.httpMethod = "POST"
+            request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+            
+            let body = [
+                "userId": userId,
+                "reportedUserId": reportedUserId,
+                "chatId": chatId
+            ]
+            
+            request.httpBody = try JSONSerialization.data(withJSONObject: body)
+            
+            let (_, response) = try await URLSession.shared.data(for: request)
+            
+            guard let httpResponse = response as? HTTPURLResponse else {
+                throw NSError(domain: "ChatViewModel", code: -1, userInfo: [NSLocalizedDescriptionKey: "Invalid response"])
+            }
+            
+            if httpResponse.statusCode != 200 {
+                throw NSError(domain: "ChatViewModel", code: httpResponse.statusCode, userInfo: [NSLocalizedDescriptionKey: "Failed to report user"])
+            }
+            
+            // Limpiar los mensajes después de reportar
+            await MainActor.run {
+                messages = []
+            }
+            
+        } catch {
+            await MainActor.run {
+                errorMessage = error.localizedDescription
+            }
+        }
+        isLoading = false
     }
 }
 

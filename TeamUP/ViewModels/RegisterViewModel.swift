@@ -52,6 +52,7 @@ class RegisterViewModel: ObservableObject {
     
     @MainActor
     func register() async {
+        // Validar que se hayan seleccionado juegos
         guard !selectedGames.isEmpty else {
             showError = true
             errorMessage = "Debes seleccionar al menos un juego"
@@ -63,19 +64,21 @@ class RegisterViewModel: ObservableObject {
         
         do {
             // Convertir los juegos seleccionados al formato correcto
-            let games = selectedGames.compactMap { game -> (String, String)? in
-                guard let rank = game.selectedRank else { return nil }
-                return (game.name, rank)
+            let games = selectedGames.map { game -> [String: String] in
+                [
+                    "nombre": game.name,
+                    "rango": game.selectedRank ?? "Principiante"
+                ]
             }
             
             // Create the user with the selected games
             let newUser = User(
                 name: username,
-                age: 0, // You might want to add age field in your registration form
+                age: 0,
                 gender: gender.rawValue,
                 description: "",
-                games: games,
-                profileImage: "default_profile" // Handle profile image upload separately
+                games: games.map { ($0["nombre"] ?? "", $0["rango"] ?? "Principiante") },
+                profileImage: "default_profile"
             )
             
             // Register user in MongoDB
@@ -84,19 +87,9 @@ class RegisterViewModel: ObservableObject {
             print("Usuario registrado exitosamente en MongoDB")
             isRegistering = false
             
-        } catch let error as MongoDBError {
-            showError = true
-            errorMessage = error.localizedDescription
-            isRegistering = false
-            
-        } catch let error as AuthError {
-            showError = true
-            errorMessage = error.localizedDescription
-            isRegistering = false
-            
         } catch {
             showError = true
-            errorMessage = "Error inesperado durante el registro"
+            errorMessage = "Error al registrar el usuario. Por favor, intenta de nuevo."
             isRegistering = false
         }
     }

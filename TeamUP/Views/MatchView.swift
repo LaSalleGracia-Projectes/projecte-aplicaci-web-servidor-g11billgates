@@ -83,7 +83,8 @@ struct MatchView: View {
                     NavigationLink(destination: ChatView(
                         chatId: UUID().uuidString,
                         userId: matchedUser.id,
-                        userAge: matchedUser.age
+                        userAge: matchedUser.age,
+                        reportedUserId: matchedUser.id
                     )) {
                         Text("Enviar mensaje")
                             .font(.system(size: 18, weight: .semibold))

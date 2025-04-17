@@ -51,9 +51,11 @@ struct MainScreenView: View {
                                 onLike: {
                                     withAnimation(.spring()) {
                                         showLikeOverlay = true
-                                        viewModel.likeUser()
-                                        DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
-                                            showLikeOverlay = false
+                                        Task {
+                                            await viewModel.likeUser(viewModel.users[viewModel.currentIndex].id)
+                                            DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
+                                                showLikeOverlay = false
+                                            }
                                         }
                                     }
                                 },
@@ -129,9 +131,11 @@ struct MainScreenView: View {
                             Button(action: {
                                 withAnimation(.spring()) {
                                     showLikeOverlay = true
-                                    viewModel.likeUser()
-                                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
-                                        showLikeOverlay = false
+                                    Task {
+                                        await viewModel.likeUser(viewModel.users[viewModel.currentIndex].id)
+                                        DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
+                                            showLikeOverlay = false
+                                        }
                                     }
                                 }
                             }) {
