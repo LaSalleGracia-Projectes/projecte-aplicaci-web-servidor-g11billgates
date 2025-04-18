@@ -22,6 +22,7 @@ const axios = require('axios');
 const mongoose = require('mongoose');
 const Usuario = require('./src/models/usuario');
 const Match = require('./src/models/match');
+const { sendPasswordResetEmail } = require('./src/services/emailService');
 
 ffmpeg.setFfmpegPath(ffmpegInstaller.path);
 
@@ -917,8 +918,9 @@ app.post('/forgot-password', async (req, res) => {
             }
         );
         
-        // Aquí iría la lógica para enviar el email con el token
-        // Por ahora solo enviamos una respuesta de éxito
+        // Enviar email con el token
+        await sendPasswordResetEmail(email, resetToken);
+        
         res.status(200).json({ 
             message: 'Se han enviado las instrucciones de recuperación a tu email'
         });
@@ -927,6 +929,55 @@ app.post('/forgot-password', async (req, res) => {
         console.error('Forgot password error:', error);
         res.status(500).json({ 
             error: 'Error al procesar la solicitud de recuperación de contraseña',
+            details: error.message
+        });
+    }
+});
+
+// Reset password with token endpoint
+app.post('/reset-password-with-token', async (req, res) => {
+    try {
+        const { token, newPassword } = req.body;
+        
+        const database = client.db(dbName);
+        const usuarios = database.collection('usuario');
+        
+        // Buscar usuario por token y verificar que no haya expirado
+        const user = await usuarios.findOne({
+            resetToken: token,
+            resetTokenExpiry: { $gt: new Date() }
+        });
+        
+        if (!user) {
+            return res.status(400).json({ error: 'Token inválido o expirado' });
+        }
+        
+        // Hash new password
+        const saltRounds = 10;
+        const hashedNewPassword = await bcrypt.hash(newPassword, saltRounds);
+        
+        // Update password and clear reset token
+        const result = await usuarios.updateOne(
+            { IDUsuario: user.IDUsuario },
+            { 
+                $set: { 
+                    Contraseña: hashedNewPassword,
+                    resetToken: null,
+                    resetTokenExpiry: null
+                }
+            }
+        );
+        
+        if (result.modifiedCount === 1) {
+            res.status(200).json({ message: 'Contraseña actualizada correctamente' });
+        } else {
+            throw new Error('Error al actualizar la contraseña');
+        }
+        
+    } catch (error) {
+        console.error('Reset password error:', error);
+        res.status(500).json({ 
+            error: 'Error al cambiar la contraseña',
             details: error.message
         });
     }
