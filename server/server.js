@@ -23,6 +23,7 @@ const mongoose = require('mongoose');
 const Usuario = require('./src/models/usuario');
 const Match = require('./src/models/match');
 const { sendPasswordResetEmail } = require('./src/services/emailService');
+const nodemailer = require('nodemailer');
 
 ffmpeg.setFfmpegPath(ffmpegInstaller.path);
 
@@ -843,56 +844,18 @@ app.post('/change-password', async (req, res) => {
     }
 });
 
-// Reset password endpoint
-app.post('/reset-password', async (req, res) => {
-    try {
-        const { Identificador, NuevaContraseña } = req.body;
-        
-        const database = client.db(dbName);
-        const usuarios = database.collection('usuario');
-        
-        // Buscar usuario por email o nombre
-        const user = await usuarios.findOne({
-            $or: [
-                { Correo: Identificador },
-                { Nombre: Identificador }
-            ]
-        });
-        
-        if (!user) {
-            return res.status(401).json({ error: 'Usuario no encontrado' });
-        }
-        
-        // Hash new password
-        const saltRounds = 10;
-        const hashedNewPassword = await bcrypt.hash(NuevaContraseña, saltRounds);
-        
-        // Update password in database
-        const result = await usuarios.updateOne(
-            { IDUsuario: user.IDUsuario },
-            { $set: { Contraseña: hashedNewPassword } }
-        );
-        
-        if (result.modifiedCount === 1) {
-            res.status(200).json({ message: 'Contraseña actualizada correctamente' });
-        } else {
-            throw new Error('Error al actualizar la contraseña');
-        }
-        
-    } catch (error) {
-        console.error('Reset password error:', error);
-        res.status(500).json({ 
-            error: 'Error al cambiar la contraseña',
-            details: error.message
-        });
-    }
-});
-
 // Forgot password endpoint
 app.post('/forgot-password', async (req, res) => {
     try {
         const { email } = req.body;
         
+        if (!email) {
+            return res.status(400).json({ 
+                success: false,
+                message: 'El email es requerido' 
+            });
+        }
+
         const database = client.db(dbName);
         const usuarios = database.collection('usuario');
         
@@ -900,85 +863,179 @@ app.post('/forgot-password', async (req, res) => {
         const user = await usuarios.findOne({ Correo: email });
         
         if (!user) {
-            return res.status(404).json({ error: 'No se encontró ningún usuario con ese email' });
+            // Por seguridad, devolvemos el mismo mensaje aunque el email no exista
+            return res.status(200).json({ 
+                success: true,
+                message: 'Si el email está registrado, recibirás un correo con las instrucciones de recuperación'
+            });
         }
         
-        // Generar token de recuperación
+        // Generar código de verificación de 6 dígitos
+        const verificationCode = Math.floor(100000 + Math.random() * 900000).toString();
         const resetToken = crypto.randomBytes(32).toString('hex');
         const resetTokenExpiry = new Date(Date.now() + 3600000); // 1 hora
         
-        // Guardar token en la base de datos
+        // Guardar código y token en la base de datos
         await usuarios.updateOne(
             { IDUsuario: user.IDUsuario },
             { 
                 $set: { 
+                    verificationCode,
                     resetToken,
                     resetTokenExpiry
                 }
             }
         );
         
-        // Enviar email con el token
-        await sendPasswordResetEmail(email, resetToken);
+        // Enviar email con el código de verificación
+        const transporter = nodemailer.createTransport({
+            service: 'gmail',
+            auth: {
+                user: process.env.EMAIL_USER,
+                pass: process.env.EMAIL_PASSWORD
+            }
+        });
+
+        const mailOptions = {
+            from: process.env.EMAIL_USER,
+            to: email,
+            subject: 'Código de verificación - TeamUP',
+            html: `
+                <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+                    <h1 style="color: #4a90e2;">Verificación de identidad</h1>
+                    <p>Hemos recibido una solicitud para restablecer tu contraseña en TeamUP.</p>
+                    <p>Para verificar que eres tú, introduce el siguiente código en la aplicación:</p>
+                    <div style="text-align: center; margin: 20px 0;">
+                        <div style="background-color: #f5f5f5; padding: 15px; border-radius: 5px; display: inline-block;">
+                            <span style="font-size: 24px; font-weight: bold; letter-spacing: 5px;">${verificationCode}</span>
+                        </div>
+                    </div>
+                    <p>Este código expirará en 10 minutos.</p>
+                    <p>Si no has solicitado este cambio, puedes ignorar este correo.</p>
+                    <hr style="margin: 20px 0; border: none; border-top: 1px solid #eee;">
+                    <p style="color: #666; font-size: 12px;">Este es un correo automático, por favor no respondas a este mensaje.</p>
+                </div>
+            `
+        };
+
+        await transporter.sendMail(mailOptions);
         
         res.status(200).json({ 
-            message: 'Se han enviado las instrucciones de recuperación a tu email'
+            success: true,
+            message: 'Si el email está registrado, recibirás un correo con el código de verificación'
         });
         
     } catch (error) {
         console.error('Forgot password error:', error);
         res.status(500).json({ 
-            error: 'Error al procesar la solicitud de recuperación de contraseña',
-            details: error.message
+            success: false,
+            message: 'Error al procesar la solicitud de recuperación de contraseña'
         });
     }
 });
 
-// Reset password with token endpoint
-app.post('/reset-password-with-token', async (req, res) => {
+// Verify code endpoint
+app.post('/verify-code', async (req, res) => {
     try {
-        const { token, newPassword } = req.body;
+        const { email, code } = req.body;
+        
+        if (!email || !code) {
+            return res.status(400).json({ 
+                success: false,
+                message: 'Email y código son requeridos' 
+            });
+        }
         
         const database = client.db(dbName);
         const usuarios = database.collection('usuario');
         
-        // Buscar usuario por token y verificar que no haya expirado
-        const user = await usuarios.findOne({
+        // Buscar usuario por email y código
+        const user = await usuarios.findOne({ 
+            Correo: email,
+            verificationCode: code,
+            resetTokenExpiry: { $gt: new Date() }
+        });
+        
+        if (!user) {
+            return res.status(400).json({ 
+                success: false,
+                message: 'Código inválido o expirado' 
+            });
+        }
+        
+        // Devolver el token de reset para cambiar la contraseña
+        res.status(200).json({ 
+            success: true,
+            message: 'Código verificado correctamente',
+            resetToken: user.resetToken
+        });
+        
+    } catch (error) {
+        console.error('Verify code error:', error);
+        res.status(500).json({ 
+            success: false,
+            message: 'Error al verificar el código'
+        });
+    }
+});
+
+// Reset password endpoint
+app.post('/reset-password', async (req, res) => {
+    try {
+        const { token, newPassword } = req.body;
+        
+        if (!token || !newPassword) {
+            return res.status(400).json({ 
+                success: false,
+                message: 'Token y nueva contraseña son requeridos' 
+            });
+        }
+        
+        const database = client.db(dbName);
+        const usuarios = database.collection('usuario');
+        
+        // Buscar usuario por token de recuperación
+        const user = await usuarios.findOne({ 
             resetToken: token,
             resetTokenExpiry: { $gt: new Date() }
         });
         
         if (!user) {
-            return res.status(400).json({ error: 'Token inválido o expirado' });
+            return res.status(400).json({ 
+                success: false,
+                message: 'Token inválido o expirado' 
+            });
         }
         
-        // Hash new password
+        // Hash de la nueva contraseña
         const saltRounds = 10;
-        const hashedNewPassword = await bcrypt.hash(newPassword, saltRounds);
+        const hashedPassword = await bcrypt.hash(newPassword, saltRounds);
         
-        // Update password and clear reset token
-        const result = await usuarios.updateOne(
+        // Actualizar contraseña y limpiar tokens
+        await usuarios.updateOne(
             { IDUsuario: user.IDUsuario },
             { 
                 $set: { 
-                    Contraseña: hashedNewPassword,
-                    resetToken: null,
-                    resetTokenExpiry: null
+                    Contraseña: hashedPassword 
+                },
+                $unset: { 
+                    resetToken: "",
+                    resetTokenExpiry: "",
+                    verificationCode: ""
                 }
             }
         );
         
-        if (result.modifiedCount === 1) {
-            res.status(200).json({ message: 'Contraseña actualizada correctamente' });
-        } else {
-            throw new Error('Error al actualizar la contraseña');
-        }
+        res.status(200).json({ 
+            success: true,
+            message: 'Contraseña actualizada exitosamente' 
+        });
         
     } catch (error) {
         console.error('Reset password error:', error);
         res.status(500).json({ 
-            error: 'Error al cambiar la contraseña',
-            details: error.message
+            success: false,
+            message: 'Error al resetear la contraseña'
         });
     }
 });
