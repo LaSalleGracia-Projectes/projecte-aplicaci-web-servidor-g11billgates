@@ -1701,12 +1701,22 @@ app.get('/api/users/matching', async (req, res) => {
 
             // Obtener rangos en común para cada juego
             const commonGamesWithRanks = commonGames.map(gameName => {
-                const currentUserGame = userGames.find(g => g.nombre === gameName);
-                const otherUserGame = user.Juegos.find(g => g.nombre === gameName);
+                const currentUserGame = userGames.find(g => g && g.nombre === gameName);
+                const otherUserGame = user.Juegos.find(g => g && g.nombre === gameName);
+                
+                // Verificar que ambos juegos existen y tienen la propiedad Nivel
+                if (!currentUserGame || !otherUserGame) {
+                    return {
+                        nombre: gameName,
+                        miRango: "No disponible",
+                        suRango: "No disponible"
+                    };
+                }
+
                 return {
                     nombre: gameName,
-                    miRango: currentUserGame.Nivel,
-                    suRango: otherUserGame.Nivel
+                    miRango: currentUserGame.Nivel || "No disponible",
+                    suRango: otherUserGame.Nivel || "No disponible"
                 };
             });
 
@@ -1716,7 +1726,7 @@ app.get('/api/users/matching', async (req, res) => {
                 profileImage: user.FotoPerfil || "default_profile",
                 games: user.Juegos.map(game => ({
                     nombre: game.nombre,
-                    rango: game.Nivel
+                    rango: game.Nivel || "No disponible"
                 })),
                 age: user.Edad || 18,
                 region: user.Region || "Not specified",
