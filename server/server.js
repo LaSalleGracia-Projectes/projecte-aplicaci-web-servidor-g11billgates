@@ -1705,8 +1705,8 @@ app.get('/api/users/matching', async (req, res) => {
                 const otherUserGame = user.Juegos.find(g => g.nombre === gameName);
                 return {
                     nombre: gameName,
-                    miRango: currentUserGame.rango,
-                    suRango: otherUserGame.rango
+                    miRango: currentUserGame.Nivel,
+                    suRango: otherUserGame.Nivel
                 };
             });
 
@@ -1716,7 +1716,7 @@ app.get('/api/users/matching', async (req, res) => {
                 profileImage: user.FotoPerfil || "default_profile",
                 games: user.Juegos.map(game => ({
                     nombre: game.nombre,
-                    rango: game.rango
+                    rango: game.Nivel
                 })),
                 age: user.Edad || 18,
                 region: user.Region || "Not specified",
