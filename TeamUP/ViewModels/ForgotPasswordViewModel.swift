@@ -3,6 +3,7 @@ import Foundation
 class ForgotPasswordViewModel: ObservableObject {
     @Published var errorMessage = ""
     @Published var showSuccess = false
+    @Published var codeSent = false
     
     func sendVerificationCode(email: String) {
         if email.isEmpty {
@@ -41,7 +42,14 @@ class ForgotPasswordViewModel: ObservableObject {
                 }
                 
                 if httpResponse.statusCode == 200 {
-                    self?.errorMessage = ""
+                    if let data = data,
+                       let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+                       let message = json["message"] as? String {
+                        self?.errorMessage = message
+                    } else {
+                        self?.errorMessage = "Se ha enviado un código de verificación a tu email"
+                    }
+                    self?.codeSent = true
                 } else {
                     if let data = data,
                        let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],

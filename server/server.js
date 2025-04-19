@@ -887,38 +887,13 @@ app.post('/forgot-password', async (req, res) => {
             }
         );
         
-        // Enviar email con el código de verificación
-        const transporter = nodemailer.createTransport({
-            service: 'gmail',
-            auth: {
-                user: process.env.EMAIL_USER,
-                pass: process.env.EMAIL_PASSWORD
-            }
-        });
-
-        const mailOptions = {
-            from: process.env.EMAIL_USER,
-            to: email,
-            subject: 'Código de verificación - TeamUP',
-            html: `
-                <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
-                    <h1 style="color: #4a90e2;">Verificación de identidad</h1>
-                    <p>Hemos recibido una solicitud para restablecer tu contraseña en TeamUP.</p>
-                    <p>Para verificar que eres tú, introduce el siguiente código en la aplicación:</p>
-                    <div style="text-align: center; margin: 20px 0;">
-                        <div style="background-color: #f5f5f5; padding: 15px; border-radius: 5px; display: inline-block;">
-                            <span style="font-size: 24px; font-weight: bold; letter-spacing: 5px;">${verificationCode}</span>
-                        </div>
-                    </div>
-                    <p>Este código expirará en 10 minutos.</p>
-                    <p>Si no has solicitado este cambio, puedes ignorar este correo.</p>
-                    <hr style="margin: 20px 0; border: none; border-top: 1px solid #eee;">
-                    <p style="color: #666; font-size: 12px;">Este es un correo automático, por favor no respondas a este mensaje.</p>
-                </div>
-            `
-        };
-
-        await transporter.sendMail(mailOptions);
+        // Enviar email con el código de verificación usando el servicio de email
+        const { sendVerificationCode } = require('./src/services/emailService');
+        const emailSent = await sendVerificationCode(email, verificationCode);
+        
+        if (!emailSent) {
+            throw new Error('Error al enviar el email');
+        }
         
         res.status(200).json({ 
             success: true,

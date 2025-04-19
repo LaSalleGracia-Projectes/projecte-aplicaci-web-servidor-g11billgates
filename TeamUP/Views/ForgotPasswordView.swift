@@ -1,13 +1,12 @@
 import SwiftUI
 
 struct ForgotPasswordView: View {
-    @Environment(\.dismiss) private var dismiss
     @StateObject private var viewModel = ForgotPasswordViewModel()
     @State private var email = ""
-    @State private var verificationCode = ""
+    @State private var code = ""
     @State private var newPassword = ""
     @State private var confirmPassword = ""
-    @State private var step = 1 // 1: Email, 2: Code and Password
+    @Environment(\.dismiss) var dismiss
     
     var body: some View {
         NavigationView {
@@ -16,15 +15,15 @@ struct ForgotPasswordView: View {
                 VStack(spacing: 15) {
                     Image(systemName: "lock.rotation")
                         .font(.system(size: 60))
-                        .foregroundColor(.red)
+                        .foregroundColor(.orange)
                         .padding(.top, 30)
                     
-                    Text(step == 1 ? "Recuperar Contraseña" : "Verificar Código")
+                    Text(!viewModel.codeSent ? "Recuperar Contraseña" : "Verificar Código")
                         .font(.title)
                         .fontWeight(.bold)
                         .foregroundColor(.primary)
                     
-                    Text(step == 1 ? 
+                    Text(!viewModel.codeSent ? 
                          "Ingresa tu email para recibir un código de verificación" :
                          "Ingresa el código recibido y tu nueva contraseña")
                         .font(.subheadline)
@@ -35,7 +34,7 @@ struct ForgotPasswordView: View {
                 
                 // Campos de entrada
                 VStack(alignment: .leading, spacing: 15) {
-                    if step == 1 {
+                    if !viewModel.codeSent {
                         // Campo de email
                         VStack(alignment: .leading, spacing: 8) {
                             Text("Email")
@@ -55,7 +54,7 @@ struct ForgotPasswordView: View {
                                 .font(.headline)
                                 .foregroundColor(.primary)
                             
-                            TextField("", text: $verificationCode)
+                            TextField("", text: $code)
                                 .textFieldStyle(RoundedBorderTextFieldStyle())
                                 .keyboardType(.numberPad)
                         }
@@ -85,30 +84,29 @@ struct ForgotPasswordView: View {
                 
                 // Botón de acción
                 Button(action: {
-                    if step == 1 {
+                    if !viewModel.codeSent {
                         viewModel.sendVerificationCode(email: email)
-                        step = 2
                     } else {
                         if newPassword == confirmPassword {
-                            viewModel.resetPassword(email: email, code: verificationCode, newPassword: newPassword)
+                            viewModel.resetPassword(email: email, code: code, newPassword: newPassword)
                         } else {
                             viewModel.errorMessage = "Las contraseñas no coinciden"
                         }
                     }
                 }) {
-                    Text(step == 1 ? "Enviar código" : "Cambiar contraseña")
+                    Text(!viewModel.codeSent ? "Enviar código" : "Cambiar contraseña")
                         .font(.headline)
                         .foregroundColor(.white)
                         .frame(maxWidth: .infinity)
                         .frame(height: 50)
-                        .background(Color.red)
+                        .background(Color.orange)
                         .cornerRadius(10)
                 }
                 .padding(.horizontal)
-                .disabled(step == 1 ? email.isEmpty : 
-                         verificationCode.isEmpty || newPassword.isEmpty || confirmPassword.isEmpty)
-                .opacity((step == 1 ? email.isEmpty : 
-                         verificationCode.isEmpty || newPassword.isEmpty || confirmPassword.isEmpty) ? 0.6 : 1)
+                .disabled(!viewModel.codeSent ? email.isEmpty : 
+                         code.isEmpty || newPassword.isEmpty || confirmPassword.isEmpty)
+                .opacity((!viewModel.codeSent ? email.isEmpty : 
+                         code.isEmpty || newPassword.isEmpty || confirmPassword.isEmpty) ? 0.6 : 1)
                 
                 if !viewModel.errorMessage.isEmpty {
                     Text(viewModel.errorMessage)
