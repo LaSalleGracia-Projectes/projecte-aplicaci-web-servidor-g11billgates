@@ -3,9 +3,11 @@ import SwiftUI
 struct ForgotPasswordView: View {
     @Environment(\.dismiss) private var dismiss
     @StateObject private var viewModel = ForgotPasswordViewModel()
-    @State private var identifier = ""
+    @State private var email = ""
+    @State private var verificationCode = ""
     @State private var newPassword = ""
     @State private var confirmPassword = ""
+    @State private var step = 1 // 1: Email, 2: Code and Password
     
     var body: some View {
         NavigationView {
@@ -17,12 +19,14 @@ struct ForgotPasswordView: View {
                         .foregroundColor(.red)
                         .padding(.top, 30)
                     
-                    Text("Recuperar Contraseña")
+                    Text(step == 1 ? "Recuperar Contraseña" : "Verificar Código")
                         .font(.title)
                         .fontWeight(.bold)
                         .foregroundColor(.primary)
                     
-                    Text("Ingresa tu email o nombre de usuario y la nueva contraseña")
+                    Text(step == 1 ? 
+                         "Ingresa tu email para recibir un código de verificación" :
+                         "Ingresa el código recibido y tu nueva contraseña")
                         .font(.subheadline)
                         .foregroundColor(.gray)
                         .multilineTextAlignment(.center)
@@ -31,49 +35,68 @@ struct ForgotPasswordView: View {
                 
                 // Campos de entrada
                 VStack(alignment: .leading, spacing: 15) {
-                    // Campo de identificador
-                    VStack(alignment: .leading, spacing: 8) {
-                        Text("Email o nombre de usuario")
-                            .font(.headline)
-                            .foregroundColor(.primary)
+                    if step == 1 {
+                        // Campo de email
+                        VStack(alignment: .leading, spacing: 8) {
+                            Text("Email")
+                                .font(.headline)
+                                .foregroundColor(.primary)
+                            
+                            TextField("", text: $email)
+                                .textFieldStyle(RoundedBorderTextFieldStyle())
+                                .autocapitalization(.none)
+                                .autocorrectionDisabled()
+                                .keyboardType(.emailAddress)
+                        }
+                    } else {
+                        // Campo de código
+                        VStack(alignment: .leading, spacing: 8) {
+                            Text("Código de verificación")
+                                .font(.headline)
+                                .foregroundColor(.primary)
+                            
+                            TextField("", text: $verificationCode)
+                                .textFieldStyle(RoundedBorderTextFieldStyle())
+                                .keyboardType(.numberPad)
+                        }
                         
-                        TextField("", text: $identifier)
-                            .textFieldStyle(RoundedBorderTextFieldStyle())
-                            .autocapitalization(.none)
-                            .autocorrectionDisabled()
-                    }
-                    
-                    // Campo de nueva contraseña
-                    VStack(alignment: .leading, spacing: 8) {
-                        Text("Nueva contraseña")
-                            .font(.headline)
-                            .foregroundColor(.primary)
+                        // Campo de nueva contraseña
+                        VStack(alignment: .leading, spacing: 8) {
+                            Text("Nueva contraseña")
+                                .font(.headline)
+                                .foregroundColor(.primary)
+                            
+                            SecureField("", text: $newPassword)
+                                .textFieldStyle(RoundedBorderTextFieldStyle())
+                        }
                         
-                        SecureField("", text: $newPassword)
-                            .textFieldStyle(RoundedBorderTextFieldStyle())
-                    }
-                    
-                    // Campo de confirmación
-                    VStack(alignment: .leading, spacing: 8) {
-                        Text("Confirmar contraseña")
-                            .font(.headline)
-                            .foregroundColor(.primary)
-                        
-                        SecureField("", text: $confirmPassword)
-                            .textFieldStyle(RoundedBorderTextFieldStyle())
+                        // Campo de confirmación
+                        VStack(alignment: .leading, spacing: 8) {
+                            Text("Confirmar contraseña")
+                                .font(.headline)
+                                .foregroundColor(.primary)
+                            
+                            SecureField("", text: $confirmPassword)
+                                .textFieldStyle(RoundedBorderTextFieldStyle())
+                        }
                     }
                 }
                 .padding(.horizontal)
                 
-                // Botón de recuperación
+                // Botón de acción
                 Button(action: {
-                    if newPassword == confirmPassword {
-                        viewModel.resetPassword(identifier: identifier, newPassword: newPassword)
+                    if step == 1 {
+                        viewModel.sendVerificationCode(email: email)
+                        step = 2
                     } else {
-                        viewModel.errorMessage = "Las contraseñas no coinciden"
+                        if newPassword == confirmPassword {
+                            viewModel.resetPassword(email: email, code: verificationCode, newPassword: newPassword)
+                        } else {
+                            viewModel.errorMessage = "Las contraseñas no coinciden"
+                        }
                     }
                 }) {
-                    Text("Cambiar contraseña")
+                    Text(step == 1 ? "Enviar código" : "Cambiar contraseña")
                         .font(.headline)
                         .foregroundColor(.white)
                         .frame(maxWidth: .infinity)
@@ -82,8 +105,10 @@ struct ForgotPasswordView: View {
                         .cornerRadius(10)
                 }
                 .padding(.horizontal)
-                .disabled(identifier.isEmpty || newPassword.isEmpty || confirmPassword.isEmpty)
-                .opacity((identifier.isEmpty || newPassword.isEmpty || confirmPassword.isEmpty) ? 0.6 : 1)
+                .disabled(step == 1 ? email.isEmpty : 
+                         verificationCode.isEmpty || newPassword.isEmpty || confirmPassword.isEmpty)
+                .opacity((step == 1 ? email.isEmpty : 
+                         verificationCode.isEmpty || newPassword.isEmpty || confirmPassword.isEmpty) ? 0.6 : 1)
                 
                 if !viewModel.errorMessage.isEmpty {
                     Text(viewModel.errorMessage)
