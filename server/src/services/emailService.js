@@ -1,11 +1,11 @@
 const nodemailer = require('nodemailer');
 
-// Configuración del transporter
+// Configuración del transporter para Gmail
 const transporter = nodemailer.createTransport({
     service: 'gmail',
     auth: {
-        user: process.env.EMAIL_USER,
-        pass: process.env.EMAIL_PASSWORD
+        user: 'mozziebabum2005@gmail.com',
+        pass: 'rtqr kgcq sloz oklr'
     }
 });
 
