@@ -91,7 +91,8 @@ class MainScreenViewModel: ObservableObject {
         isLoading = false
     }
     
-    func likeUser() {
+    @MainActor
+    func likeUser() async {
         guard currentIndex < users.count else { return }
         let likedUser = users[currentIndex]
         showMatch = true
@@ -99,7 +100,8 @@ class MainScreenViewModel: ObservableObject {
         currentIndex += 1
     }
     
-    func dislikeUser() {
+    @MainActor
+    func dislikeUser() async {
         currentIndex += 1
     }
     

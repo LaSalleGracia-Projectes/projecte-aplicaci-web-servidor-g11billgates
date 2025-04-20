@@ -62,9 +62,11 @@ struct MainScreenView: View {
                                 onDislike: {
                                     withAnimation(.spring()) {
                                         showDislikeOverlay = true
-                                        viewModel.dislikeUser()
-                                        DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
-                                            showDislikeOverlay = false
+                                        Task {
+                                            await viewModel.dislikeUser()
+                                            DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
+                                                showDislikeOverlay = false
+                                            }
                                         }
                                     }
                                 },
@@ -112,9 +114,11 @@ struct MainScreenView: View {
                             Button(action: {
                                 withAnimation(.spring()) {
                                     showDislikeOverlay = true
-                                    viewModel.dislikeUser()
-                                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
-                                        showDislikeOverlay = false
+                                    Task {
+                                        await viewModel.dislikeUser()
+                                        DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
+                                            showDislikeOverlay = false
+                                        }
                                     }
                                 }
                             }) {

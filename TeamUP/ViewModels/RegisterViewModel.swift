@@ -125,48 +125,6 @@ class RegisterViewModel: ObservableObject {
             isRegistering = false
         }
     }
-    
-    private func uploadProfileImage(_ image: UIImage) async throws -> String {
-        guard let imageData = image.jpegData(compressionQuality: 0.8) else {
-            throw NSError(domain: "ImageError", code: 1, userInfo: [NSLocalizedDescriptionKey: "No se pudo convertir la imagen"])
-        }
-        
-        let boundary = UUID().uuidString
-        var request = URLRequest(url: URL(string: "http://localhost:3000/upload-profile-image")!)
-        request.httpMethod = "POST"
-        request.setValue("multipart/form-data; boundary=\(boundary)", forHTTPHeaderField: "Content-Type")
-        
-        var body = Data()
-        
-        // Añadir la imagen
-        body.append("--\(boundary)\r\n".data(using: .utf8)!)
-        body.append("Content-Disposition: form-data; name=\"profileImage\"; filename=\"profile.jpg\"\r\n".data(using: .utf8)!)
-        body.append("Content-Type: image/jpeg\r\n\r\n".data(using: .utf8)!)
-        body.append(imageData)
-        body.append("\r\n".data(using: .utf8)!)
-        
-        // Añadir el IDUsuario (será actualizado después de crear el usuario)
-        body.append("--\(boundary)\r\n".data(using: .utf8)!)
-        body.append("Content-Disposition: form-data; name=\"IDUsuario\"\r\n\r\n".data(using: .utf8)!)
-        body.append("0\r\n".data(using: .utf8)!)
-        
-        body.append("--\(boundary)--\r\n".data(using: .utf8)!)
-        
-        request.httpBody = body
-        
-        let (data, response) = try await URLSession.shared.data(for: request)
-        
-        guard let httpResponse = response as? HTTPURLResponse else {
-            throw NSError(domain: "NetworkError", code: 1, userInfo: [NSLocalizedDescriptionKey: "Respuesta inválida del servidor"])
-        }
-        
-        guard httpResponse.statusCode == 200 else {
-            throw NSError(domain: "NetworkError", code: 1, userInfo: [NSLocalizedDescriptionKey: "Error al subir la imagen"])
-        }
-        
-        let json = try JSONSerialization.jsonObject(with: data) as? [String: Any]
-        return json?["imageUrl"] as? String ?? ""
-    }
 }
 
 struct ProfileImageResponse: Decodable {
