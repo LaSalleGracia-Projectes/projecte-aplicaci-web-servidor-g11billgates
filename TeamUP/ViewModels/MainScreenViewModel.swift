@@ -59,17 +59,6 @@ class MainScreenViewModel: ObservableObject {
                 ("CS2", "Águila")
             ],
             profileImage: "CatTestIcon"
-        ),
-        User(
-            name: "Marc",
-            age: 20,
-            gender: "Hombre",
-            description: "Mejor player del wow españa",
-            games: [
-                ("WoW", "2900"),
-                ("CS2", "Águila")
-            ],
-            profileImage: "DogTestIcon"
         )
     ]
     
@@ -82,61 +71,40 @@ class MainScreenViewModel: ObservableObject {
     @MainActor
     func loadUsers() async {
         isLoading = true
+        errorMessage = nil
         
-        do {
-            // Get current user
-            guard let currentUser = authManager.currentUser else {
-                users = []
-                isLoading = false
-                return
-            }
-            
-            // Get matching users
-            let matchingUsers = try await mongoManager.getMatchingUsers(userId: currentUser.id)
-            
-            // Update UI with matching users
-            users = matchingUsers
-            isLoading = false
-            
-        } catch {
-            print("Error loading users: \(error)")
+        // Obtener los juegos del usuario actual
+        guard let currentUser = authManager.currentUser else {
             users = []
             isLoading = false
+            return
         }
+        
+        let currentUserGames = Set(currentUser.games.map { $0.0 })
+        
+        // Filtrar usuarios que tengan al menos un juego en común
+        users = defaultUsers.filter { user in
+            let userGames = Set(user.games.map { $0.0 })
+            return !userGames.intersection(currentUserGames).isEmpty
+        }
+        
+        isLoading = false
     }
     
-    func likeUser(_ userId: String) async {
-        do {
-            let url = URL(string: "http://localhost:3000/like-user")!
-            var request = URLRequest(url: url)
-            request.httpMethod = "POST"
-            request.setValue("application/json", forHTTPHeaderField: "Content-Type")
-            
-            let body = [
-                "userId": currentUserId,
-                "likedUserId": userId
-            ]
-            
-            request.httpBody = try JSONSerialization.data(withJSONObject: body)
-            
-            let (_, response) = try await URLSession.shared.data(for: request)
-            
-            guard let httpResponse = response as? HTTPURLResponse else {
-                throw NSError(domain: "MainScreenViewModel", code: -1, userInfo: [NSLocalizedDescriptionKey: "Invalid response"])
-            }
-            
-            if httpResponse.statusCode != 200 {
-                throw NSError(domain: "MainScreenViewModel", code: httpResponse.statusCode, userInfo: [NSLocalizedDescriptionKey: "Failed to like user"])
-            }
-            
-        } catch {
-            errorMessage = error.localizedDescription
-        }
+    func likeUser() {
+        guard currentIndex < users.count else { return }
+        let likedUser = users[currentIndex]
+        showMatch = true
+        matchedUser = likedUser
+        currentIndex += 1
     }
     
     func dislikeUser() {
-        guard currentIndex < users.count else { return }
         currentIndex += 1
+    }
+    
+    func resetIndex() {
+        currentIndex = 0
     }
     
     // Esta función se usará cuando implementemos la base de datos

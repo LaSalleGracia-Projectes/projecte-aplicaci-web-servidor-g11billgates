@@ -80,6 +80,9 @@ struct RegisterGamesView: View {
                         }
                     }
                     .padding()
+                    .sheet(isPresented: $viewModel.showImagePicker) {
+                        ImagePicker(image: $viewModel.profileImage)
+                    }
                     
                     // Botón Registrarse
                     Button(action: {
@@ -105,9 +108,6 @@ struct RegisterGamesView: View {
                     .padding()
                 }
             }
-        }
-        .sheet(isPresented: $viewModel.showImagePicker) {
-            ImagePicker(image: $viewModel.profileImage)
         }
         .alert("Error", isPresented: $viewModel.showError) {
             Button("OK", role: .cancel) { }

@@ -52,7 +52,7 @@ struct MainScreenView: View {
                                     withAnimation(.spring()) {
                                         showLikeOverlay = true
                                         Task {
-                                            await viewModel.likeUser(viewModel.users[viewModel.currentIndex].id)
+                                            await viewModel.likeUser()
                                             DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
                                                 showLikeOverlay = false
                                             }
@@ -132,7 +132,7 @@ struct MainScreenView: View {
                                 withAnimation(.spring()) {
                                     showLikeOverlay = true
                                     Task {
-                                        await viewModel.likeUser(viewModel.users[viewModel.currentIndex].id)
+                                        await viewModel.likeUser()
                                         DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
                                             showLikeOverlay = false
                                         }
