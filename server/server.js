@@ -777,12 +777,17 @@ app.post('/login', async (req, res) => {
 // Register endpoint
 app.post('/register', async (req, res) => {
     try {
-        const { Nombre, Correo, Contraseña, Juegos } = req.body;
+        const { Nombre, Correo, Contraseña, Juegos, FotoPerfil, Edad, Region, Descripcion, Genero } = req.body;
         
         console.log('Datos recibidos en registro:', {
             Nombre,
             Correo,
-            Juegos
+            Juegos,
+            FotoPerfil,
+            Edad,
+            Region,
+            Descripcion,
+            Genero
         });
 
         const database = client.db(dbName);
@@ -796,7 +801,16 @@ app.post('/register', async (req, res) => {
 
         // Generate a new unique IDUsuario
         const lastUser = await usuarios.findOne({}, { sort: { IDUsuario: -1 } });
-        const IDUsuario = lastUser ? (lastUser.IDUsuario || 0) + 1 : 1;
+        console.log('Último usuario encontrado:', lastUser);
+        
+        let IDUsuario;
+        if (lastUser && lastUser.IDUsuario) {
+            IDUsuario = parseInt(lastUser.IDUsuario) + 1;
+        } else {
+            IDUsuario = 1;
+        }
+        
+        console.log('Nuevo IDUsuario generado:', IDUsuario);
         
         // Hash the password
         const saltRounds = 10;
@@ -830,17 +844,19 @@ app.post('/register', async (req, res) => {
 
         // Create user document
         const userDocument = {
-            IDUsuario: Number(IDUsuario),
+            IDUsuario: IDUsuario,
             Nombre: String(Nombre),
             Correo: String(Correo),
             Contraseña: hashedPassword,
-            FotoPerfil: "default_profile",
-            Edad: 18,
-            Region: "Not specified",
-            Descripcion: "¡Hola! Me gusta jugar videojuegos.",
+            FotoPerfil: FotoPerfil || "default_profile",
+            Edad: Number(Edad) || 18,
+            Region: Region || "Not specified",
+            Descripcion: Descripcion || "¡Hola! Me gusta jugar videojuegos.",
             Juegos: formattedGames,
-            Genero: "Not specified"
+            Genero: Genero || "Not specified"
         };
+
+        console.log('Documento de usuario a insertar:', userDocument);
 
         // Insert the user
         const result = await usuarios.insertOne(userDocument);
