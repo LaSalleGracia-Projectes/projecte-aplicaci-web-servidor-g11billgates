@@ -17,6 +17,8 @@ const usuarioSchema = new mongoose.Schema({
     verificationCode: { type: String, default: null },
     verificationCodeExpires: { type: Date, default: null },
     verified: { type: Boolean, default: false },
+    isOnline: { type: Boolean, default: false },
+    lastSeen: { type: Date, default: Date.now },
     createdAt: { type: Date, default: Date.now },
     updatedAt: { type: Date, default: Date.now }
 });

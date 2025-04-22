@@ -526,7 +526,7 @@ async function initializeData(database) {
         
         // Obtener el último IDChat para asegurar unicidad
         const lastChat = await chats.findOne({}, { sort: { IDChat: -1 } });
-        let nextChatId = lastChat ? lastChat.IDChat + 1 : 1;
+        let nextChatId = (lastChat && lastChat.IDChat) ? parseInt(lastChat.IDChat) + 1 : 1;
         
         for (let i = 0; i < allUsers.length; i++) {
             for (let j = i + 1; j < allUsers.length; j++) {
@@ -544,7 +544,7 @@ async function initializeData(database) {
                 if (!existingChat) {
                     // Crear nuevo chat con ID incremental
                     const newChat = {
-                        IDChat: nextChatId++,
+                        IDChat: nextChatId,
                         usuarios: [user1.IDUsuario, user2.IDUsuario],
                         mensajes: [],
                         FechaCreacion: new Date(),
@@ -552,7 +552,8 @@ async function initializeData(database) {
                     };
                     
                     await chats.insertOne(newChat);
-                    console.log(`Created chat between ${user1.Nombre} and ${user2.Nombre}`);
+                    console.log(`Created chat between ${user1.Nombre} and ${user2.Nombre} with ID ${nextChatId}`);
+                    nextChatId++;
                 } else {
                     console.log(`Chat already exists between ${user1.Nombre} and ${user2.Nombre}`);
                 }
@@ -1957,3 +1958,63 @@ connectDB().then(() => {
         }
     });
 }); 
+
+// Middleware to update online status
+const updateOnlineStatus = async (req, res, next) => {
+    if (req.user) {
+        try {
+            await Usuario.findByIdAndUpdate(
+                req.user._id,
+                { 
+                    isOnline: true,
+                    lastSeen: new Date()
+                }
+            );
+        } catch (error) {
+            console.error('Error updating online status:', error);
+        }
+    }
+    next();
+};
+
+// Apply online status middleware to all authenticated routes
+app.use('/api', authenticateToken, updateOnlineStatus);
+
+// Add route to handle user disconnection
+app.post('/api/auth/logout', authenticateToken, async (req, res) => {
+    try {
+        await Usuario.findByIdAndUpdate(
+            req.user._id,
+            { 
+                isOnline: false,
+                lastSeen: new Date()
+            }
+        );
+        res.json({ message: 'Logged out successfully' });
+    } catch (error) {
+        console.error('Error updating offline status:', error);
+        res.status(500).json({ error: 'Error updating status' });
+    }
+});
+
+// ... existing code ...
+
+// Modify the profile endpoint to include online status
+app.get('/api/auth/profile', authenticateToken, async (req, res) => {
+    try {
+        const user = await Usuario.findById(req.user._id).select('-Contraseña -resetToken -resetTokenExpiry');
+        if (!user) {
+            return res.status(404).json({ error: 'User not found' });
+        }
+        res.json({
+            ...user.toObject(),
+            isOnline: user.isOnline,
+            lastSeen: user.lastSeen
+        });
+    } catch (error) {
+        console.error('Error fetching profile:', error);
+        res.status(500).json({ error: 'Error fetching profile' });
+    }
+});
+
+// ... existing code ...
