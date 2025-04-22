@@ -429,12 +429,139 @@ async function connectDB() {
         await crearColecciones(database);
         await crearIndices(database);
         await configurarValidacion(database);
-        await runSeeders(database);
+        await initializeData(database);
         
         console.log('Database initialized successfully');
     } catch (error) {
         console.error('Error connecting to MongoDB:', error);
         process.exit(1);
+    }
+}
+
+async function initializeData(database) {
+    try {
+        const usuarios = database.collection('usuario');
+        const chats = database.collection('chat');
+
+        // 1. Crear usuarios
+        console.log('Creating users...');
+        const testUsers = [
+            {
+                IDUsuario: 1,
+                Nombre: "Alex",
+                Correo: "alex@test.com",
+                Contraseña: await bcrypt.hash("password123", 10),
+                FotoPerfil: "DwarfTestIcon",
+                Edad: 23,
+                Region: "Europa",
+                Descripcion: "Buscando equipo para rankeds",
+                Juegos: [
+                    { nombre: "League of Legends", rango: "Platino" },
+                    { nombre: "Valorant", rango: "Oro" }
+                ],
+                Genero: "Masculino"
+            },
+            {
+                IDUsuario: 2,
+                Nombre: "Laura",
+                Correo: "laura@test.com",
+                Contraseña: await bcrypt.hash("password123", 10),
+                FotoPerfil: "ToadTestIcon",
+                Edad: 25,
+                Region: "Europa",
+                Descripcion: "Main support, looking for ADC",
+                Juegos: [
+                    { nombre: "League of Legends", rango: "Diamante" },
+                    { nombre: "World of Warcraft", rango: "2100+" }
+                ],
+                Genero: "Femenino"
+            },
+            {
+                IDUsuario: 3,
+                Nombre: "Roger",
+                Correo: "roger@test.com",
+                Contraseña: await bcrypt.hash("password123", 10),
+                FotoPerfil: "TerroristTestIcon",
+                Edad: 28,
+                Region: "Europa",
+                Descripcion: "Jugador competitivo buscando team",
+                Juegos: [
+                    { nombre: "Valorant", rango: "Inmortal" },
+                    { nombre: "CS2", rango: "Águila" }
+                ],
+                Genero: "Masculino"
+            },
+            {
+                IDUsuario: 4,
+                Nombre: "Saten",
+                Correo: "saten@test.com",
+                Contraseña: await bcrypt.hash("password123", 10),
+                FotoPerfil: "CatTestIcon",
+                Edad: 24,
+                Region: "Europa",
+                Descripcion: "Hola me llamo Saten soy maja",
+                Juegos: [
+                    { nombre: "Valorant", rango: "Inmortal" },
+                    { nombre: "CS2", rango: "Águila" }
+                ],
+                Genero: "Femenino"
+            }
+        ];
+        
+        // Insertar usuarios
+        for (const user of testUsers) {
+            const existingUser = await usuarios.findOne({ IDUsuario: user.IDUsuario });
+            if (!existingUser) {
+                await usuarios.insertOne(user);
+                console.log(`Created user: ${user.Nombre}`);
+            } else {
+                console.log(`User ${user.Nombre} already exists`);
+            }
+        }
+        
+        // 2. Crear chats entre todos los usuarios
+        console.log('\nCreating chats...');
+        const allUsers = await usuarios.find({}).toArray();
+        console.log(`Found ${allUsers.length} users`);
+        
+        // Obtener el último IDChat para asegurar unicidad
+        const lastChat = await chats.findOne({}, { sort: { IDChat: -1 } });
+        let nextChatId = lastChat ? lastChat.IDChat + 1 : 1;
+        
+        for (let i = 0; i < allUsers.length; i++) {
+            for (let j = i + 1; j < allUsers.length; j++) {
+                const user1 = allUsers[i];
+                const user2 = allUsers[j];
+                
+                // Verificar si ya existe un chat entre estos usuarios
+                const existingChat = await chats.findOne({
+                    $or: [
+                        { usuarios: [user1.IDUsuario, user2.IDUsuario] },
+                        { usuarios: [user2.IDUsuario, user1.IDUsuario] }
+                    ]
+                });
+                
+                if (!existingChat) {
+                    // Crear nuevo chat con ID incremental
+                    const newChat = {
+                        IDChat: nextChatId++,
+                        usuarios: [user1.IDUsuario, user2.IDUsuario],
+                        mensajes: [],
+                        FechaCreacion: new Date(),
+                        estado: 'active'
+                    };
+                    
+                    await chats.insertOne(newChat);
+                    console.log(`Created chat between ${user1.Nombre} and ${user2.Nombre}`);
+                } else {
+                    console.log(`Chat already exists between ${user1.Nombre} and ${user2.Nombre}`);
+                }
+            }
+        }
+        
+        console.log('\nInitialization completed successfully!');
+    } catch (error) {
+        console.error('Error initializing data:', error);
     }
 }
 
