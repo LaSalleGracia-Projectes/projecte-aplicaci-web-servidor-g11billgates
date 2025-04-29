@@ -528,20 +528,28 @@ async function initializeData(database) {
         const lastChat = await chats.findOne({}, { sort: { IDChat: -1 } });
         let nextChatId = (lastChat && lastChat.IDChat) ? parseInt(lastChat.IDChat) + 1 : 1;
         
+        // Primero, obtener todos los chats existentes para evitar duplicados
+        const existingChats = await chats.find({}).toArray();
+        const existingChatPairs = new Set();
+        
+        // Crear un conjunto de pares de usuarios que ya tienen chat
+        for (const chat of existingChats) {
+            if (chat && chat.usuarios && Array.isArray(chat.usuarios)) {
+                const sortedUsers = [...chat.usuarios].sort((a, b) => a - b);
+                existingChatPairs.add(`${sortedUsers[0]}-${sortedUsers[1]}`);
+            }
+        }
+        
         for (let i = 0; i < allUsers.length; i++) {
             for (let j = i + 1; j < allUsers.length; j++) {
                 const user1 = allUsers[i];
                 const user2 = allUsers[j];
                 
-                // Verificar si ya existe un chat entre estos usuarios
-                const existingChat = await chats.findOne({
-                    $or: [
-                        { usuarios: [user1.IDUsuario, user2.IDUsuario] },
-                        { usuarios: [user2.IDUsuario, user1.IDUsuario] }
-                    ]
-                });
+                // Crear una clave única para el par de usuarios
+                const sortedUsers = [user1.IDUsuario, user2.IDUsuario].sort((a, b) => a - b);
+                const chatKey = `${sortedUsers[0]}-${sortedUsers[1]}`;
                 
-                if (!existingChat) {
+                if (!existingChatPairs.has(chatKey)) {
                     // Crear nuevo chat con ID incremental
                     const newChat = {
                         IDChat: nextChatId,
@@ -551,9 +559,19 @@ async function initializeData(database) {
                         estado: 'active'
                     };
                     
-                    await chats.insertOne(newChat);
-                    console.log(`Created chat between ${user1.Nombre} and ${user2.Nombre} with ID ${nextChatId}`);
-                    nextChatId++;
+                    try {
+                        await chats.insertOne(newChat);
+                        console.log(`Created chat between ${user1.Nombre} and ${user2.Nombre} with ID ${nextChatId}`);
+                        nextChatId++;
+                        existingChatPairs.add(chatKey);
+                    } catch (error) {
+                        if (error.code === 11000) {
+                            // Si hay un error de duplicado, incrementar el ID y reintentar
+                            nextChatId++;
+                            continue;
+                        }
+                        throw error;
+                    }
                 } else {
                     console.log(`Chat already exists between ${user1.Nombre} and ${user2.Nombre}`);
                 }
@@ -800,15 +818,9 @@ app.post('/register', async (req, res) => {
         }
 
         // Generate a new unique IDUsuario
-        const lastUser = await usuarios.findOne({}, { sort: { IDUsuario: -1 } });
-        console.log('Último usuario encontrado:', lastUser);
-        
-        let IDUsuario;
-        if (lastUser && lastUser.IDUsuario) {
-            IDUsuario = parseInt(lastUser.IDUsuario) + 1;
-        } else {
-            IDUsuario = 1;
-        }
+        const timestamp = Date.now();
+        const random = Math.floor(Math.random() * 1000);
+        const IDUsuario = parseInt(`${timestamp}${random}`);
         
         console.log('Nuevo IDUsuario generado:', IDUsuario);
         
@@ -1267,6 +1279,18 @@ app.post('/upload-chat-media', upload.single('chatMedia'), async (req, res) => {
         }
 
         const { IDMensaje, IDUsuario } = req.body;
+        
+        // Verificar que los campos requeridos estén presentes en el body
+        if (!IDMensaje || !IDUsuario) {
+            return res.status(400).json({ 
+                error: 'Faltan campos requeridos en la petición',
+                detalles: {
+                    IDMensaje: !IDMensaje ? 'Campo requerido' : 'OK',
+                    IDUsuario: !IDUsuario ? 'Campo requerido' : 'OK'
+                }
+            });
+        }
+
         const database = client.db(dbName);
         const archivosMultimedia = database.collection('archivos_multimedia');
         const mensajes = database.collection('mensaje');
@@ -1306,11 +1330,16 @@ app.post('/upload-chat-media', upload.single('chatMedia'), async (req, res) => {
             Tipo: fileType,
             URL: `/uploads/chat/${path.basename(processedFilePath)}`,
             NombreArchivo: req.file.originalname,
-            Tamaño: req.file.size,
+            Tamaño: Number(req.file.size),
             Formato: req.file.mimetype,
             FechaSubida: new Date(),
-            Duracion: duracion
+            Duracion: duracion ? Number(duracion) : null
         };
+
+        // Verificar que todos los campos requeridos estén presentes
+        if (!archivoData.IDArchivo || !archivoData.IDMensaje || !archivoData.Tipo || !archivoData.URL || !archivoData.FechaSubida) {
+            throw new Error('Faltan campos requeridos en el documento');
+        }
 
         await archivosMultimedia.insertOne(archivoData);
 
@@ -2030,6 +2059,88 @@ app.get('/api/auth/profile', authenticateToken, async (req, res) => {
     } catch (error) {
         console.error('Error fetching profile:', error);
         res.status(500).json({ error: 'Error fetching profile' });
+    }
+});
+
+// ... existing code ...
+
+// Configuración de imágenes prefabricadas para chat
+const imagenesPrefabricadas = [
+    {
+        id: 1,
+        nombre: "thumbs-up",
+        url: "https://api.dicebear.com/7.x/bottts/png?seed=thumbs-up",
+        descripcion: "Pulgar arriba"
+    },
+    {
+        id: 2,
+        nombre: "thumbs-down",
+        url: "https://api.dicebear.com/7.x/bottts/png?seed=thumbs-down",
+        descripcion: "Pulgar abajo"
+    },
+    {
+        id: 3,
+        nombre: "heart",
+        url: "https://api.dicebear.com/7.x/bottts/png?seed=heart",
+        descripcion: "Corazón"
+    },
+    {
+        id: 4,
+        nombre: "smile",
+        url: "https://api.dicebear.com/7.x/bottts/png?seed=smile",
+        descripcion: "Sonrisa"
+    },
+    {
+        id: 5,
+        nombre: "sad",
+        url: "https://api.dicebear.com/7.x/bottts/png?seed=sad",
+        descripcion: "Triste"
+    }
+];
+
+// Endpoint para obtener imágenes prefabricadas
+app.get('/api/chat/prefab-images', (req, res) => {
+    res.json(imagenesPrefabricadas);
+});
+
+// Endpoint para enviar imagen prefabricada en el chat
+app.post('/api/chat/send-prefab-image', async (req, res) => {
+    try {
+        const { chatId, userId, imageId } = req.body;
+
+        if (!chatId || !userId || !imageId) {
+            return res.status(400).json({ error: 'Faltan datos requeridos' });
+        }
+
+        const imagen = imagenesPrefabricadas.find(img => img.id === parseInt(imageId));
+        if (!imagen) {
+            return res.status(404).json({ error: 'Imagen no encontrada' });
+        }
+
+        const database = client.db(dbName);
+        const mensajes = database.collection('mensaje');
+
+        // Crear nuevo mensaje con la imagen prefabricada
+        const nuevoMensaje = {
+            IDMensaje: Date.now(),
+            IDChat: parseInt(chatId),
+            IDUsuario: parseInt(userId),
+            Tipo: "imagen_prefab",
+            Contenido: imagen.url,
+            FechaEnvio: new Date(),
+            Estado: "enviado"
+        };
+
+        await mensajes.insertOne(nuevoMensaje);
+
+        res.status(200).json({
+            message: 'Imagen enviada exitosamente',
+            mensaje: nuevoMensaje
+        });
+
+    } catch (error) {
+        console.error('Error al enviar imagen prefabricada:', error);
+        res.status(500).json({ error: 'Error al enviar la imagen' });
     }
 });
 
