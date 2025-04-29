@@ -1,24 +1,42 @@
 import SwiftUI
 import AVKit
 import PhotosUI
-
-// MARK: - Models
-struct ChatMessage: Identifiable {
-    let id = UUID()
-    let content: String
-    let timestamp: String
-    let isFromCurrentUser: Bool
-}
+import AVFoundation
 
 // MARK: - Views
 struct ChatView: View {
     @StateObject private var viewModel: ChatViewModel
-    @Environment(\.presentationMode) var presentationMode
+    @Environment(\.dismiss) private var dismiss
+    @State private var showReportAlert = false
+    @State private var showBlockAlert = false
+    @State private var showDeleteAlert = false
     @State private var showImagePicker = false
     @State private var showVideoPicker = false
-    @State private var showReportAlert = false
+    @State private var showCamera = false
+    @State private var showMediaOptions = false
+    @State private var showReportOptions = false
+    @State private var showBlockOptions = false
+    @State private var showDeleteOptions = false
+    @State private var showAgeRestrictionAlert = false
+    @State private var selectedImage: UIImage?
+    @State private var selectedVideoURL: URL?
+    @State private var isRecording = false
+    @State private var recordingTime: TimeInterval = 0
+    @State private var audioRecorder: AVAudioRecorder?
+    @State private var audioURL: URL?
+    @State private var audioPlayer: AVAudioPlayer?
+    @State private var recordingTimer: Timer?
+    
+    let chatId: String
+    let userId: String
+    let userAge: Int
+    let reportedUserId: String
     
     init(chatId: String, userId: String, userAge: Int, reportedUserId: String) {
+        self.chatId = chatId
+        self.userId = userId
+        self.userAge = userAge
+        self.reportedUserId = reportedUserId
         _viewModel = StateObject(wrappedValue: ChatViewModel(chatId: chatId, userId: userId, userAge: userAge, reportedUserId: reportedUserId))
     }
     
@@ -64,7 +82,7 @@ struct ChatView: View {
             Button("Reportar", role: .destructive) {
                 Task {
                     await viewModel.reportUser()
-                    presentationMode.wrappedValue.dismiss()
+                    dismiss()
                 }
             }
         } message: {
@@ -75,7 +93,7 @@ struct ChatView: View {
     private var headerView: some View {
         HStack {
             Button(action: {
-                presentationMode.wrappedValue.dismiss()
+                dismiss()
             }) {
                 Image(systemName: "chevron.left")
                     .font(.system(size: 20))
@@ -248,7 +266,7 @@ struct MessageBubble: View {
                                 }
                             }
                         }) {
-                            Image(systemName: isPlaying ? "pause.circle.fill" : "play.circle.fill")
+                            Image(systemName: isPlaying ? "stop.circle.fill" : "play.circle.fill")
                                 .font(.system(size: 24))
                                 .foregroundColor(.blue)
                         }

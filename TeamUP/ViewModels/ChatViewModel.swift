@@ -4,7 +4,7 @@ import PhotosUI
 import AVFoundation
 
 @MainActor
-class ChatViewModel: NSObject, ObservableObject {
+class ChatViewModel: NSObject, ObservableObject, AVAudioRecorderDelegate, AVAudioPlayerDelegate {
     @Published var messages: [Message] = []
     @Published var messageText = ""
     @Published var selectedItem: PhotosPickerItem?
@@ -213,6 +213,10 @@ class ChatViewModel: NSObject, ObservableObject {
         audioPlayer = nil
     }
     
+    func pauseAudio() {
+        audioPlayer?.pause()
+    }
+    
     func cancelRecording() {
         audioRecorder?.stop()
         audioRecorder?.deleteRecording()
@@ -270,22 +274,18 @@ class ChatViewModel: NSObject, ObservableObject {
         }
         isLoading = false
     }
-}
-
-// MARK: - AVAudioRecorderDelegate
-extension ChatViewModel: AVAudioRecorderDelegate {
-    nonisolated func audioRecorderDidFinishRecording(_ recorder: AVAudioRecorder, successfully flag: Bool) {
+    
+    // MARK: - AVAudioRecorderDelegate
+    func audioRecorderDidFinishRecording(_ recorder: AVAudioRecorder, successfully flag: Bool) {
         if !flag {
-            Task { @MainActor in
-                errorMessage = "Error al finalizar la grabación"
-            }
+            errorMessage = "Error al finalizar la grabación"
         }
     }
-}
-
-// MARK: - AVAudioPlayerDelegate
-extension ChatViewModel: AVAudioPlayerDelegate {
-    nonisolated func audioPlayerDidFinishPlaying(_ player: AVAudioPlayer, successfully flag: Bool) {
-        // Aquí podrías actualizar la UI cuando termine de reproducir
+    
+    // MARK: - AVAudioPlayerDelegate
+    func audioPlayerDidFinishPlaying(_ player: AVAudioPlayer, successfully flag: Bool) {
+        if !flag {
+            errorMessage = "Error al reproducir el audio"
+        }
     }
 } 

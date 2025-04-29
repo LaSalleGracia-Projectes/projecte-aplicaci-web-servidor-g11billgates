@@ -7,23 +7,24 @@
 
 import Foundation
 
-enum MessageType {
+public enum MessageType {
     case text
     case image
     case video
     case voice
 }
 
-struct Message: Identifiable {
-    let id = UUID()
-    var content: String
-    var type: MessageType
-    var mediaURL: String?
-    var isFromCurrentUser: Bool
-    var timestamp: String
-    var duration: Double? // Para videos y mensajes de voz
+public struct Message: Identifiable {
+    public let id: String
+    public var content: String
+    public var type: MessageType
+    public var mediaURL: String?
+    public var isFromCurrentUser: Bool
+    public var timestamp: String
+    public var duration: Double? // Para videos y mensajes de voz
     
-    init(content: String, type: MessageType = .text, mediaURL: String? = nil, isFromCurrentUser: Bool, timestamp: String, duration: Double? = nil) {
+    public init(id: String = UUID().uuidString, content: String, type: MessageType = .text, mediaURL: String? = nil, isFromCurrentUser: Bool, timestamp: String, duration: Double? = nil) {
+        self.id = id
         self.content = content
         self.type = type
         self.mediaURL = mediaURL
