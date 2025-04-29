@@ -7,17 +7,6 @@
 
 import SwiftUI
 
-// MARK: - Models
-struct ChatPreview: Identifiable {
-    let id: String
-    let username: String
-    let lastMessage: String
-    let timestamp: String
-    let profileImage: String
-    let participants: [String]
-    let isHidden: Bool
-}
-
 // MARK: - View
 struct ChatListView: View {
     @StateObject private var viewModel = ChatListViewModel(currentUserId: "current-user-id")

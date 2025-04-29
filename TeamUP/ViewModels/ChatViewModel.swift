@@ -165,6 +165,74 @@ class ChatViewModel: NSObject, ObservableObject, AVAudioRecorderDelegate, AVAudi
         }
     }
     
+    private func sendVoiceMessage(_ url: URL) async {
+        isLoading = true
+        do {
+            // Create multipart form data
+            let boundary = UUID().uuidString
+            var request = URLRequest(url: URL(string: "\(API.baseURL)/upload-chat-media")!)
+            request.httpMethod = "POST"
+            request.setValue("multipart/form-data; boundary=\(boundary)", forHTTPHeaderField: "Content-Type")
+            
+            var body = Data()
+            
+            // Add chatId
+            body.append("--\(boundary)\r\n".data(using: .utf8)!)
+            body.append("Content-Disposition: form-data; name=\"chatId\"\r\n\r\n".data(using: .utf8)!)
+            body.append("\(chatId)\r\n".data(using: .utf8)!)
+            
+            // Add userId
+            body.append("--\(boundary)\r\n".data(using: .utf8)!)
+            body.append("Content-Disposition: form-data; name=\"userId\"\r\n\r\n".data(using: .utf8)!)
+            body.append("\(userId)\r\n".data(using: .utf8)!)
+            
+            // Add audio file
+            let audioData = try Data(contentsOf: url)
+            body.append("--\(boundary)\r\n".data(using: .utf8)!)
+            body.append("Content-Disposition: form-data; name=\"chatMedia\"; filename=\"voice_message.m4a\"\r\n".data(using: .utf8)!)
+            body.append("Content-Type: audio/m4a\r\n\r\n".data(using: .utf8)!)
+            body.append(audioData)
+            body.append("\r\n".data(using: .utf8)!)
+            
+            // End boundary
+            body.append("--\(boundary)--\r\n".data(using: .utf8)!)
+            
+            request.httpBody = body
+            
+            let (data, response) = try await URLSession.shared.data(for: request)
+            
+            guard let httpResponse = response as? HTTPURLResponse else {
+                throw APIError.invalidResponse
+            }
+            
+            if httpResponse.statusCode == 200 {
+                if let responseData = try? JSONDecoder().decode(MediaUploadResponse.self, from: data) {
+                    let newMessage = Message(
+                        content: "Mensaje de voz",
+                        type: .voice,
+                        mediaURL: responseData.data.url,
+                        isFromCurrentUser: true,
+                        timestamp: formatTimestamp(),
+                        duration: responseData.data.duration
+                    )
+                    
+                    await MainActor.run {
+                        messages.append(newMessage)
+                    }
+                }
+            } else {
+                throw APIError.serverError(httpResponse.statusCode)
+            }
+            
+            // Clean up
+            try? FileManager.default.removeItem(at: url)
+            
+        } catch {
+            errorMessage = "Error al enviar el mensaje de voz: \(error.localizedDescription)"
+        }
+        isLoading = false
+    }
+    
     func stopRecording() {
         audioRecorder?.stop()
         isRecording = false
@@ -178,24 +246,13 @@ class ChatViewModel: NSObject, ObservableObject, AVAudioRecorderDelegate, AVAudi
         }
     }
     
-    private func sendVoiceMessage(_ url: URL) async {
-        isLoading = true
-        do {
-            let mediaResponse = try await mediaService.uploadVoiceMessage(url, forChat: chatId, userId: userId)
-            let duration = try await mediaService.getMediaDuration(from: url)
-            let newMessage = Message(
-                content: "Mensaje de voz",
-                type: .voice,
-                mediaURL: mediaResponse.url,
-                isFromCurrentUser: true,
-                timestamp: formatTimestamp(),
-                duration: duration
-            )
-            messages.append(newMessage)
-        } catch {
-            errorMessage = error.localizedDescription
-        }
-        isLoading = false
+    func cancelRecording() {
+        audioRecorder?.stop()
+        audioRecorder?.deleteRecording()
+        isRecording = false
+        recordingTimer?.invalidate()
+        recordingTimer = nil
+        audioURL = nil
     }
     
     func playVoiceMessage(_ url: URL) {
@@ -215,15 +272,6 @@ class ChatViewModel: NSObject, ObservableObject, AVAudioRecorderDelegate, AVAudi
     
     func pauseAudio() {
         audioPlayer?.pause()
-    }
-    
-    func cancelRecording() {
-        audioRecorder?.stop()
-        audioRecorder?.deleteRecording()
-        isRecording = false
-        recordingTimer?.invalidate()
-        recordingTimer = nil
-        audioURL = nil
     }
     
     private func getDocumentsDirectory() -> URL {

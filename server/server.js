@@ -1739,24 +1739,90 @@ async function calcularCompatibilidad(usuario1Id, usuario2Id, juegoId) {
 // Función para buscar usuarios compatibles
 async function buscarUsuariosCompatibles(usuarioId, juegoId) {
     try {
-        const usuario = await Usuario.findById(usuarioId);
+        const database = client.db(dbName);
+        const usuario = await database.collection('usuario').findOne({ IDUsuario: Number(usuarioId) });
+        
         if (!usuario) {
             throw new Error('Usuario no encontrado');
         }
 
-        // Obtener el ELO del usuario para el juego específico
-        const eloUsuario = usuario.elo.find(e => e.gameId.toString() === juegoId.toString())?.elo || 1000;
+        // Obtener los juegos del usuario actual
+        const userGames = usuario.Juegos || [];
+        if (userGames.length === 0) {
+            return []; // Si el usuario no tiene juegos, retornar array vacío
+        }
 
-        // Buscar usuarios con ELO similar
-        const usuariosCompatibles = await Usuario.find({
-            _id: { $ne: usuarioId },
-            'elo.gameId': juegoId,
-            $or: [
-                { 'elo.elo': { $gte: eloUsuario - 200, $lte: eloUsuario + 200 } }
-            ]
-        }).limit(10);
+        // Crear un conjunto de nombres de juegos para búsqueda más eficiente
+        const userGameNames = new Set(userGames.map(game => game.nombre));
 
-        return usuariosCompatibles;
+        // Buscar usuarios que tengan al menos un juego en común
+        const matchingUsers = await database.collection('usuario')
+            .find({
+                IDUsuario: { $ne: Number(usuarioId) }, // Excluir al usuario actual
+                Juegos: {
+                    $elemMatch: {
+                        nombre: { $in: [...userGameNames] }
+                    }
+                }
+            })
+            .project({
+                IDUsuario: 1,
+                Nombre: 1,
+                FotoPerfil: 1,
+                Juegos: 1,
+                Edad: 1,
+                Region: 1,
+                Descripcion: 1
+            })
+            .toArray();
+
+        // Calcular el porcentaje de coincidencia y obtener rangos en común
+        const usersWithMatchPercentage = matchingUsers.map(user => {
+            const userGameNames = new Set(user.Juegos.map(g => g.nombre));
+            const commonGames = [...userGameNames].filter(name => userGameNames.has(name));
+            const matchPercentage = (commonGames.length / userGames.length) * 100;
+
+            // Obtener rangos en común para cada juego
+            const commonGamesWithRanks = commonGames.map(gameName => {
+                const currentUserGame = userGames.find(g => g && g.nombre === gameName);
+                const otherUserGame = user.Juegos.find(g => g && g.nombre === gameName);
+                
+                // Verificar que ambos juegos existen y tienen la propiedad rango
+                if (!currentUserGame || !otherUserGame) {
+                    return {
+                        nombre: gameName,
+                        miRango: "No disponible",
+                        suRango: "No disponible"
+                    };
+                }
+
+                return {
+                    nombre: gameName,
+                    miRango: currentUserGame.rango || "No disponible",
+                    suRango: otherUserGame.rango || "No disponible"
+                };
+            });
+
+            return {
+                id: user.IDUsuario,
+                name: user.Nombre,
+                profileImage: user.FotoPerfil || "default_profile",
+                games: user.Juegos.map(game => ({
+                    nombre: game.nombre,
+                    rango: game.rango || "No disponible"
+                })),
+                age: user.Edad || 18,
+                region: user.Region || "Not specified",
+                description: user.Descripcion || "No description available",
+                matchPercentage: Math.round(matchPercentage),
+                commonGames: commonGamesWithRanks
+            };
+        });
+
+        // Ordenar por porcentaje de coincidencia
+        const sortedUsers = usersWithMatchPercentage.sort((a, b) => b.matchPercentage - a.matchPercentage);
+
+        return sortedUsers;
     } catch (error) {
         console.error('Error al buscar usuarios compatibles:', error);
         throw error;
@@ -1883,106 +1949,33 @@ app.put('/api/matches/:matchId/resultado', authenticateToken, async (req, res) =
     }
 });
 
-// Endpoint para obtener usuarios con juegos en común
+// Endpoint para obtener usuarios compatibles
 app.get('/api/users/matching', async (req, res) => {
     try {
-        const { userId } = req.query;
+        const { userId, gameId } = req.query;
         
-        if (!userId) {
-            return res.status(400).json({ error: 'Se requiere el ID del usuario' });
+        if (!userId || !gameId) {
+            return res.status(400).json({ error: 'Se requieren userId y gameId' });
         }
 
-        const database = client.db(dbName);
-
-        // Obtener el usuario actual
-        const currentUser = await database.collection('usuario').findOne({ 
-            IDUsuario: parseInt(userId) 
-        });
+        const usuariosCompatibles = await buscarUsuariosCompatibles(userId, gameId);
         
-        if (!currentUser) {
-            return res.status(404).json({ error: 'Usuario no encontrado' });
-        }
-
-        // Obtener los juegos del usuario actual
-        const userGames = currentUser.Juegos || [];
-        if (userGames.length === 0) {
-            return res.json([]); // Si el usuario no tiene juegos, retornar array vacío
-        }
-
-        // Crear un conjunto de nombres de juegos para búsqueda más eficiente
-        const userGameNames = new Set(userGames.map(game => game.nombre));
-
-        // Buscar usuarios que tengan al menos un juego en común
-        const matchingUsers = await database.collection('usuario')
-            .find({
-                IDUsuario: { $ne: parseInt(userId) }, // Excluir al usuario actual
-                Juegos: {
-                    $elemMatch: {
-                        nombre: { $in: [...userGameNames] }
-                    }
-                }
-            })
-            .project({
-                IDUsuario: 1,
-                Nombre: 1,
-                FotoPerfil: 1,
-                Juegos: 1,
-                Edad: 1,
-                Region: 1,
-                Descripcion: 1
-            })
-            .toArray();
-
-        // Calcular el porcentaje de coincidencia y obtener rangos en común
-        const usersWithMatchPercentage = matchingUsers.map(user => {
-            const userGameNames = new Set(user.Juegos.map(g => g.nombre));
-            const commonGames = [...userGameNames].filter(name => userGameNames.has(name));
-            const matchPercentage = (commonGames.length / userGames.length) * 100;
-
-            // Obtener rangos en común para cada juego
-            const commonGamesWithRanks = commonGames.map(gameName => {
-                const currentUserGame = userGames.find(g => g && g.nombre === gameName);
-                const otherUserGame = user.Juegos.find(g => g && g.nombre === gameName);
-                
-                // Verificar que ambos juegos existen y tienen la propiedad Nivel
-                if (!currentUserGame || !otherUserGame) {
-                    return {
-                        nombre: gameName,
-                        miRango: "No disponible",
-                        suRango: "No disponible"
-                    };
-                }
-
-                return {
-                    nombre: gameName,
-                    miRango: currentUserGame.Nivel || "No disponible",
-                    suRango: otherUserGame.Nivel || "No disponible"
-                };
+        // Verificar si hay usuarios compatibles
+        if (usuariosCompatibles.length === 0) {
+            return res.status(404).json({ 
+                message: 'No se encontraron usuarios compatibles',
+                suggestions: [
+                    'Intenta agregar más juegos a tu perfil',
+                    'Ajusta tus preferencias de búsqueda',
+                    'Revisa tu configuración de región'
+                ]
             });
+        }
 
-            return {
-                id: user.IDUsuario,
-                name: user.Nombre,
-                profileImage: user.FotoPerfil || "default_profile",
-                games: user.Juegos.map(game => ({
-                    nombre: game.nombre,
-                    rango: game.Nivel || "No disponible"
-                })),
-                age: user.Edad || 18,
-                region: user.Region || "Not specified",
-                description: user.Descripcion || "No description available",
-                matchPercentage: Math.round(matchPercentage),
-                commonGames: commonGamesWithRanks
-            };
-        });
-
-        // Ordenar por porcentaje de coincidencia
-        const sortedUsers = usersWithMatchPercentage.sort((a, b) => b.matchPercentage - a.matchPercentage);
-
-        res.json(sortedUsers);
+        res.json(usuariosCompatibles);
     } catch (error) {
-        console.error('Error al obtener usuarios con juegos en común:', error);
-        res.status(500).json({ error: 'Error al obtener usuarios' });
+        console.error('Error al obtener usuarios compatibles:', error);
+        res.status(500).json({ error: 'Error al buscar usuarios compatibles' });
     }
 });
 
@@ -2313,5 +2306,78 @@ app.post('/api/chat/record-audio', upload.single('audio'), async (req, res) => {
         });
     }
 });
+
+// ... existing code ...
+
+// Endpoint para obtener los chats de un usuario
+app.get('/api/users/:userId/chats', async (req, res) => {
+    try {
+        const { userId } = req.params;
+        
+        const database = client.db(dbName);
+        const chats = database.collection('chat');
+        const usuarios = database.collection('usuario');
+        const mensajes = database.collection('mensaje');
+        
+        // Obtener todos los chats donde el usuario es participante
+        const userChats = await chats.find({
+            usuarios: { $in: [Number(userId)] },
+            oculto: { $ne: true }
+        }).toArray();
+        
+        // Para cada chat, obtener la información del otro participante y el último mensaje
+        const chatPreviews = await Promise.all(userChats.map(async (chat) => {
+            const otherUserId = chat.usuarios.find(id => id !== Number(userId));
+            const otherUser = await usuarios.findOne({ IDUsuario: otherUserId });
+            
+            // Obtener el último mensaje del chat
+            const lastMessage = await mensajes.findOne(
+                { IDChat: chat.IDChat },
+                { sort: { FechaEnvio: -1 } }
+            );
+            
+            return {
+                id: chat.IDChat.toString(),
+                username: otherUser?.Nombre ?? "Usuario desconocido",
+                lastMessage: lastMessage?.Contenido ?? "No hay mensajes",
+                timestamp: lastMessage?.FechaEnvio ? formatDate(lastMessage.FechaEnvio) : "Nunca",
+                profileImage: otherUser?.FotoPerfil ?? "default-profile",
+                participants: chat.usuarios.map(String.init),
+                isHidden: false
+            };
+        }));
+        
+        res.json(chatPreviews);
+    } catch (error) {
+        console.error('Error al obtener chats:', error);
+        res.status(500).json({ error: 'Error al obtener chats' });
+    }
+});
+
+// Función auxiliar para formatear fechas
+function formatDate(date) {
+    const now = new Date();
+    const messageDate = new Date(date);
+    const diff = now - messageDate;
+    
+    // Si es hoy
+    if (diff < 24 * 60 * 60 * 1000) {
+        return messageDate.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+    }
+    // Si es ayer
+    if (diff < 48 * 60 * 60 * 1000) {
+        return "Ayer";
+    }
+    // Si es esta semana
+    if (diff < 7 * 24 * 60 * 60 * 1000) {
+        return messageDate.toLocaleDateString([], { weekday: 'long' });
+    }
+    // Si es este año
+    if (messageDate.getFullYear() === now.getFullYear()) {
+        return messageDate.toLocaleDateString([], { month: 'short', day: 'numeric' });
+    }
+    // Si es de otro año
+    return messageDate.toLocaleDateString([], { year: 'numeric', month: 'short', day: 'numeric' });
+}
 
 // ... existing code ...
