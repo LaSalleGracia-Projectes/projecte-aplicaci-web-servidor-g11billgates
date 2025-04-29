@@ -36,9 +36,12 @@ const dbName = process.env.DB_NAME || "Projecte_prova";
 const uploadDir = path.join(__dirname, 'uploads');
 const profileImagesDir = path.join(uploadDir, 'profiles');
 const chatMediaDir = path.join(uploadDir, 'chat');
+const chatImagesDir = path.join(chatMediaDir, 'images');
+const chatVideosDir = path.join(chatMediaDir, 'videos');
+const chatAudioDir = path.join(chatMediaDir, 'audio');
 
 // Crear directorios si no existen
-[uploadDir, profileImagesDir, chatMediaDir].forEach(dir => {
+[uploadDir, profileImagesDir, chatMediaDir, chatImagesDir, chatVideosDir, chatAudioDir].forEach(dir => {
     if (!fs.existsSync(dir)) {
         fs.mkdirSync(dir, { recursive: true });
     }
@@ -69,7 +72,7 @@ const fileFilter = (req, file, cb) => {
         } else {
             cb(new Error('Solo se permiten imágenes para la foto de perfil'), false);
         }
-    } else if (file.fieldname === 'chatMedia') {
+    } else if (file.fieldname === 'chatMedia' || file.fieldname === 'audio') {
         // Permitir imágenes, videos y audios para el chat
         if (file.mimetype.startsWith('image/') || 
             file.mimetype.startsWith('video/') || 
@@ -1274,88 +1277,152 @@ app.post('/upload-profile-image', upload.single('profileImage'), async (req, res
 // Endpoint para subir archivos multimedia al chat
 app.post('/upload-chat-media', upload.single('chatMedia'), async (req, res) => {
     try {
+        console.log('Iniciando subida de archivo multimedia...');
+        console.log('Body:', req.body);
+        console.log('File:', req.file);
+
         if (!req.file) {
+            console.log('Error: No se ha subido ningún archivo');
             return res.status(400).json({ error: 'No se ha subido ningún archivo' });
         }
 
-        const { IDMensaje, IDUsuario } = req.body;
-        
-        // Verificar que los campos requeridos estén presentes en el body
-        if (!IDMensaje || !IDUsuario) {
+        const { chatId, userId } = req.body;
+        if (!chatId || !userId) {
+            console.log('Error: Faltan campos requeridos', { chatId, userId });
             return res.status(400).json({ 
-                error: 'Faltan campos requeridos en la petición',
-                detalles: {
-                    IDMensaje: !IDMensaje ? 'Campo requerido' : 'OK',
-                    IDUsuario: !IDUsuario ? 'Campo requerido' : 'OK'
-                }
+                error: 'Se requiere chatId y userId',
+                received: { chatId, userId }
             });
         }
 
         const database = client.db(dbName);
-        const archivosMultimedia = database.collection('archivos_multimedia');
         const mensajes = database.collection('mensaje');
+        const archivosMultimedia = database.collection('archivos_multimedia');
 
-        // Determinar el tipo de archivo
+        // Determinar el tipo de archivo y su subdirectorio
         const fileType = req.file.mimetype.split('/')[0];
         let processedFilePath = req.file.path;
         let duracion = null;
+        let fileUrl = '';
 
-        // Procesar el archivo según su tipo
-        if (fileType === 'image') {
-            // Procesar imagen con sharp
-            processedFilePath = path.join(chatMediaDir, 'processed-' + req.file.filename);
-            await sharp(req.file.path)
-                .resize(800, 800, { fit: 'inside' })
-                .jpeg({ quality: 80 })
-                .toFile(processedFilePath);
-            fs.unlinkSync(req.file.path);
-        } else if (fileType === 'video') {
-            // Obtener duración del video
-            duracion = await new Promise((resolve, reject) => {
-                ffmpeg.ffprobe(req.file.path, (err, metadata) => {
-                    if (err) reject(err);
-                    resolve(metadata.format.duration);
-                });
+        try {
+            // Procesar el archivo según su tipo
+            switch (fileType) {
+                case 'image':
+                    console.log('Procesando imagen...');
+                    processedFilePath = path.join(chatImagesDir, 'processed-' + req.file.filename);
+                    await sharp(req.file.path)
+                        .resize(800, 800, { fit: 'inside' })
+                        .jpeg({ quality: 80 })
+                        .toFile(processedFilePath);
+                    fs.unlinkSync(req.file.path);
+                    fileUrl = `/uploads/chat/images/processed-${path.basename(req.file.filename)}`;
+                    break;
+
+                case 'video':
+                    console.log('Procesando video...');
+                    processedFilePath = path.join(chatVideosDir, req.file.filename);
+                    fileUrl = `/uploads/chat/videos/${path.basename(req.file.filename)}`;
+                    // Obtener duración del video
+                    duracion = await new Promise((resolve, reject) => {
+                        ffmpeg.ffprobe(req.file.path, (err, metadata) => {
+                            if (err) reject(err);
+                            resolve(metadata.format.duration);
+                        });
+                    });
+                    break;
+
+                case 'audio':
+                    console.log('Procesando audio...');
+                    processedFilePath = path.join(chatAudioDir, req.file.filename);
+                    fileUrl = `/uploads/chat/audio/${path.basename(req.file.filename)}`;
+                    // Obtener duración del audio
+                    duracion = await new Promise((resolve, reject) => {
+                        ffmpeg.ffprobe(req.file.path, (err, metadata) => {
+                            if (err) reject(err);
+                            resolve(metadata.format.duration);
+                        });
+                    });
+                    break;
+
+                default:
+                    throw new Error('Tipo de archivo no soportado');
+            }
+
+            console.log('Creando mensaje en la base de datos...');
+            // Crear mensaje en la base de datos
+            const lastMessage = await mensajes.findOne({}, { sort: { IDMensaje: -1 } });
+            const IDMensaje = lastMessage ? (lastMessage.IDMensaje || 0) + 1 : 1;
+
+            // Asegurarnos de que el tipo sea uno de los permitidos
+            const tipoMensaje = fileType === 'image' ? 'imagen' : fileType;
+
+            const mensaje = {
+                IDMensaje: Number(IDMensaje),
+                IDChat: Number(chatId),
+                IDUsuario: Number(userId),
+                Tipo: tipoMensaje,
+                Contenido: fileUrl,
+                FechaEnvio: new Date(),
+                Estado: "enviado"
+            };
+
+            console.log('Insertando mensaje:', mensaje);
+            await mensajes.insertOne(mensaje);
+
+            // Crear documento en archivos_multimedia
+            const lastFile = await archivosMultimedia.findOne({}, { sort: { IDArchivo: -1 } });
+            const IDArchivo = lastFile ? (lastFile.IDArchivo || 0) + 1 : 1;
+
+            const archivoMultimedia = {
+                IDArchivo: Number(IDArchivo),
+                IDMensaje: Number(IDMensaje),
+                Tipo: tipoMensaje,
+                URL: fileUrl,
+                NombreArchivo: req.file.originalname,
+                Tamaño: Number(req.file.size),
+                Formato: req.file.mimetype,
+                FechaSubida: new Date(),
+                Duracion: duracion ? Number(duracion) : null
+            };
+
+            console.log('Insertando archivo multimedia:', archivoMultimedia);
+            await archivosMultimedia.insertOne(archivoMultimedia);
+
+            // Devolver respuesta con la URL completa
+            const baseUrl = process.env.BASE_URL || 'http://localhost:3000';
+            const fullUrl = `${baseUrl}${fileUrl}`;
+
+            console.log('Subida completada exitosamente');
+            res.json({
+                message: 'Archivo multimedia subido exitosamente',
+                data: {
+                    url: fullUrl,
+                    type: tipoMensaje,
+                    duration: duracion,
+                    messageId: IDMensaje
+                }
             });
+
+        } catch (error) {
+            console.error('Error al procesar el archivo:', error);
+            // Limpiar archivos en caso de error
+            if (fs.existsSync(req.file.path)) {
+                fs.unlinkSync(req.file.path);
+            }
+            if (fs.existsSync(processedFilePath)) {
+                fs.unlinkSync(processedFilePath);
+            }
+            throw error;
         }
 
-        // Generar ID único para el archivo
-        const lastFile = await archivosMultimedia.findOne({}, { sort: { IDArchivo: -1 } });
-        const IDArchivo = lastFile ? (lastFile.IDArchivo || 0) + 1 : 1;
-
-        // Crear registro en la base de datos
-        const archivoData = {
-            IDArchivo: Number(IDArchivo),
-            IDMensaje: Number(IDMensaje),
-            Tipo: fileType,
-            URL: `/uploads/chat/${path.basename(processedFilePath)}`,
-            NombreArchivo: req.file.originalname,
-            Tamaño: Number(req.file.size),
-            Formato: req.file.mimetype,
-            FechaSubida: new Date(),
-            Duracion: duracion ? Number(duracion) : null
-        };
-
-        // Verificar que todos los campos requeridos estén presentes
-        if (!archivoData.IDArchivo || !archivoData.IDMensaje || !archivoData.Tipo || !archivoData.URL || !archivoData.FechaSubida) {
-            throw new Error('Faltan campos requeridos en el documento');
-        }
-
-        await archivosMultimedia.insertOne(archivoData);
-
-        // Actualizar el mensaje con el ID del archivo
-        await mensajes.updateOne(
-            { IDMensaje: Number(IDMensaje) },
-            { $set: { IDArchivo: Number(IDArchivo) } }
-        );
-
-        res.json({
-            message: 'Archivo multimedia subido exitosamente',
-            archivo: archivoData
-        });
     } catch (error) {
         console.error('Error al subir archivo multimedia:', error);
-        res.status(500).json({ error: 'Error al procesar el archivo' });
+        res.status(500).json({ 
+            error: 'Error al procesar el archivo',
+            details: error.message,
+            stack: error.stack
+        });
     }
 });
 
@@ -2141,6 +2208,109 @@ app.post('/api/chat/send-prefab-image', async (req, res) => {
     } catch (error) {
         console.error('Error al enviar imagen prefabricada:', error);
         res.status(500).json({ error: 'Error al enviar la imagen' });
+    }
+});
+
+// ... existing code ...
+
+// Endpoint para grabar y guardar audio
+app.post('/api/chat/record-audio', upload.single('audio'), async (req, res) => {
+    try {
+        console.log('Iniciando grabación de audio...');
+        console.log('Body:', req.body);
+        console.log('File:', req.file);
+
+        if (!req.file) {
+            console.log('Error: No se ha subido ningún archivo de audio');
+            return res.status(400).json({ error: 'No se ha subido ningún archivo de audio' });
+        }
+
+        const { chatId, userId } = req.body;
+        if (!chatId || !userId) {
+            console.log('Error: Faltan campos requeridos', { chatId, userId });
+            return res.status(400).json({ 
+                error: 'Se requiere chatId y userId',
+                received: { chatId, userId }
+            });
+        }
+
+        const database = client.db(dbName);
+        const mensajes = database.collection('mensaje');
+        const archivosMultimedia = database.collection('archivos_multimedia');
+
+        // Mover el archivo a la carpeta de audios
+        const audioFileName = `audio-${Date.now()}-${req.file.originalname}`;
+        const audioPath = path.join(chatAudioDir, audioFileName);
+        fs.renameSync(req.file.path, audioPath);
+
+        // Obtener duración del audio
+        const duracion = await new Promise((resolve, reject) => {
+            ffmpeg.ffprobe(audioPath, (err, metadata) => {
+                if (err) reject(err);
+                resolve(metadata.format.duration);
+            });
+        });
+
+        // Crear mensaje en la base de datos
+        const lastMessage = await mensajes.findOne({}, { sort: { IDMensaje: -1 } });
+        const IDMensaje = lastMessage ? (lastMessage.IDMensaje || 0) + 1 : 1;
+
+        const fileUrl = `/uploads/chat/audio/${audioFileName}`;
+
+        const mensaje = {
+            IDMensaje: Number(IDMensaje),
+            IDChat: Number(chatId),
+            IDUsuario: Number(userId),
+            Tipo: "audio",
+            Contenido: fileUrl,
+            FechaEnvio: new Date(),
+            Estado: "enviado"
+        };
+
+        console.log('Insertando mensaje:', mensaje);
+        await mensajes.insertOne(mensaje);
+
+        // Crear documento en archivos_multimedia
+        const lastFile = await archivosMultimedia.findOne({}, { sort: { IDArchivo: -1 } });
+        const IDArchivo = lastFile ? (lastFile.IDArchivo || 0) + 1 : 1;
+
+        const archivoMultimedia = {
+            IDArchivo: Number(IDArchivo),
+            IDMensaje: Number(IDMensaje),
+            Tipo: "audio",
+            URL: fileUrl,
+            NombreArchivo: req.file.originalname,
+            Tamaño: Number(req.file.size),
+            Formato: req.file.mimetype,
+            FechaSubida: new Date(),
+            Duracion: duracion ? Number(duracion) : null
+        };
+
+        console.log('Insertando archivo multimedia:', archivoMultimedia);
+        await archivosMultimedia.insertOne(archivoMultimedia);
+
+        // Devolver respuesta con la URL completa
+        const baseUrl = process.env.BASE_URL || 'http://localhost:3000';
+        const fullUrl = `${baseUrl}${fileUrl}`;
+
+        console.log('Audio guardado exitosamente');
+        res.json({
+            message: 'Audio guardado exitosamente',
+            data: {
+                url: fullUrl,
+                type: "audio",
+                duration: duracion,
+                messageId: IDMensaje
+            }
+        });
+
+    } catch (error) {
+        console.error('Error al guardar audio:', error);
+        res.status(500).json({ 
+            error: 'Error al procesar el audio',
+            details: error.message,
+            stack: error.stack
+        });
     }
 });
 
