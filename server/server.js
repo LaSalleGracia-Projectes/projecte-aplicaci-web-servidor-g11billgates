@@ -563,9 +563,9 @@ async function initializeData(database) {
                     };
                     
                     try {
-                        await chats.insertOne(newChat);
-                        console.log(`Created chat between ${user1.Nombre} and ${user2.Nombre} with ID ${nextChatId}`);
-                        nextChatId++;
+                    await chats.insertOne(newChat);
+                    console.log(`Created chat between ${user1.Nombre} and ${user2.Nombre} with ID ${nextChatId}`);
+                    nextChatId++;
                         existingChatPairs.add(chatKey);
                     } catch (error) {
                         if (error.code === 11000) {
@@ -1306,16 +1306,16 @@ app.post('/upload-chat-media', upload.single('chatMedia'), async (req, res) => {
         let fileUrl = '';
 
         try {
-            // Procesar el archivo según su tipo
+        // Procesar el archivo según su tipo
             switch (fileType) {
                 case 'image':
                     console.log('Procesando imagen...');
                     processedFilePath = path.join(chatImagesDir, 'processed-' + req.file.filename);
-                    await sharp(req.file.path)
-                        .resize(800, 800, { fit: 'inside' })
-                        .jpeg({ quality: 80 })
-                        .toFile(processedFilePath);
-                    fs.unlinkSync(req.file.path);
+            await sharp(req.file.path)
+                .resize(800, 800, { fit: 'inside' })
+                .jpeg({ quality: 80 })
+                .toFile(processedFilePath);
+            fs.unlinkSync(req.file.path);
                     fileUrl = `/uploads/chat/images/processed-${path.basename(req.file.filename)}`;
                     break;
 
@@ -1323,13 +1323,13 @@ app.post('/upload-chat-media', upload.single('chatMedia'), async (req, res) => {
                     console.log('Procesando video...');
                     processedFilePath = path.join(chatVideosDir, req.file.filename);
                     fileUrl = `/uploads/chat/videos/${path.basename(req.file.filename)}`;
-                    // Obtener duración del video
-                    duracion = await new Promise((resolve, reject) => {
-                        ffmpeg.ffprobe(req.file.path, (err, metadata) => {
-                            if (err) reject(err);
-                            resolve(metadata.format.duration);
-                        });
-                    });
+            // Obtener duración del video
+            duracion = await new Promise((resolve, reject) => {
+                ffmpeg.ffprobe(req.file.path, (err, metadata) => {
+                    if (err) reject(err);
+                    resolve(metadata.format.duration);
+                });
+            });
                     break;
 
                 case 'audio':
@@ -1371,20 +1371,20 @@ app.post('/upload-chat-media', upload.single('chatMedia'), async (req, res) => {
             await mensajes.insertOne(mensaje);
 
             // Crear documento en archivos_multimedia
-            const lastFile = await archivosMultimedia.findOne({}, { sort: { IDArchivo: -1 } });
-            const IDArchivo = lastFile ? (lastFile.IDArchivo || 0) + 1 : 1;
+        const lastFile = await archivosMultimedia.findOne({}, { sort: { IDArchivo: -1 } });
+        const IDArchivo = lastFile ? (lastFile.IDArchivo || 0) + 1 : 1;
 
             const archivoMultimedia = {
-                IDArchivo: Number(IDArchivo),
-                IDMensaje: Number(IDMensaje),
+            IDArchivo: Number(IDArchivo),
+            IDMensaje: Number(IDMensaje),
                 Tipo: tipoMensaje,
                 URL: fileUrl,
-                NombreArchivo: req.file.originalname,
+            NombreArchivo: req.file.originalname,
                 Tamaño: Number(req.file.size),
-                Formato: req.file.mimetype,
-                FechaSubida: new Date(),
+            Formato: req.file.mimetype,
+            FechaSubida: new Date(),
                 Duracion: duracion ? Number(duracion) : null
-            };
+        };
 
             console.log('Insertando archivo multimedia:', archivoMultimedia);
             await archivosMultimedia.insertOne(archivoMultimedia);
@@ -1394,8 +1394,8 @@ app.post('/upload-chat-media', upload.single('chatMedia'), async (req, res) => {
             const fullUrl = `${baseUrl}${fileUrl}`;
 
             console.log('Subida completada exitosamente');
-            res.json({
-                message: 'Archivo multimedia subido exitosamente',
+        res.json({
+            message: 'Archivo multimedia subido exitosamente',
                 data: {
                     url: fullUrl,
                     type: tipoMensaje,
@@ -1740,8 +1740,9 @@ async function calcularCompatibilidad(usuario1Id, usuario2Id, juegoId) {
 async function buscarUsuariosCompatibles(usuarioId, juegoId) {
     try {
         const database = client.db(dbName);
-        const usuario = await database.collection('usuario').findOne({ IDUsuario: Number(usuarioId) });
         
+        // Obtener el usuario actual
+        const usuario = await database.collection('usuario').findOne({ IDUsuario: Number(usuarioId) });
         if (!usuario) {
             throw new Error('Usuario no encontrado');
         }
@@ -1756,6 +1757,7 @@ async function buscarUsuariosCompatibles(usuarioId, juegoId) {
         const userGameNames = new Set(userGames.map(game => game.nombre));
 
         // Buscar usuarios que tengan al menos un juego en común
+        // Incluimos tanto usuarios reales como decoy
         const matchingUsers = await database.collection('usuario')
             .find({
                 IDUsuario: { $ne: Number(usuarioId) }, // Excluir al usuario actual
@@ -1763,7 +1765,8 @@ async function buscarUsuariosCompatibles(usuarioId, juegoId) {
                     $elemMatch: {
                         nombre: { $in: [...userGameNames] }
                     }
-                }
+                },
+                // No filtramos por tipo de usuario (real o decoy)
             })
             .project({
                 IDUsuario: 1,
@@ -1772,7 +1775,9 @@ async function buscarUsuariosCompatibles(usuarioId, juegoId) {
                 Juegos: 1,
                 Edad: 1,
                 Region: 1,
-                Descripcion: 1
+                Descripcion: 1,
+                Genero: 1,
+                isDecoy: 1 // Incluimos este campo para identificar usuarios decoy
             })
             .toArray();
 
@@ -1787,19 +1792,10 @@ async function buscarUsuariosCompatibles(usuarioId, juegoId) {
                 const currentUserGame = userGames.find(g => g && g.nombre === gameName);
                 const otherUserGame = user.Juegos.find(g => g && g.nombre === gameName);
                 
-                // Verificar que ambos juegos existen y tienen la propiedad rango
-                if (!currentUserGame || !otherUserGame) {
-                    return {
-                        nombre: gameName,
-                        miRango: "No disponible",
-                        suRango: "No disponible"
-                    };
-                }
-
                 return {
                     nombre: gameName,
-                    miRango: currentUserGame.rango || "No disponible",
-                    suRango: otherUserGame.rango || "No disponible"
+                    miRango: currentUserGame?.rango || "No disponible",
+                    suRango: otherUserGame?.rango || "No disponible"
                 };
             });
 
@@ -1814,8 +1810,10 @@ async function buscarUsuariosCompatibles(usuarioId, juegoId) {
                 age: user.Edad || 18,
                 region: user.Region || "Not specified",
                 description: user.Descripcion || "No description available",
+                gender: user.Genero || "Not specified",
                 matchPercentage: Math.round(matchPercentage),
-                commonGames: commonGamesWithRanks
+                commonGames: commonGamesWithRanks,
+                isDecoy: user.isDecoy || false // Identificar si es un usuario decoy
             };
         });
 
