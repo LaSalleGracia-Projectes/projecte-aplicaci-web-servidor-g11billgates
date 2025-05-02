@@ -7,6 +7,7 @@ class RegisterViewModel: ObservableObject {
     @Published var confirmPassword = ""
     @Published var selectedGames: Set<Game> = []
     @Published var gender: Gender = .male
+    @Published var age: Int = 18
     @Published var filterByRank = false
     @Published var searchPreference: SearchPreference = .all
     @Published var profileImage: UIImage?
@@ -19,6 +20,13 @@ class RegisterViewModel: ObservableObject {
     private let authManager = AuthenticationManager.shared
     
     func validateFirstStep() -> Bool {
+        // Validar edad
+        guard age >= 18 else {
+            showError = true
+            errorMessage = "Debes ser mayor de 18 años para registrarte"
+            return false
+        }
+        
         // Validar email
         guard email.contains("@") else {
             showError = true
@@ -56,6 +64,13 @@ class RegisterViewModel: ObservableObject {
         guard !selectedGames.isEmpty else {
             showError = true
             errorMessage = "Debes seleccionar al menos un juego"
+            return
+        }
+        
+        // Validar edad nuevamente por seguridad
+        guard age >= 18 else {
+            showError = true
+            errorMessage = "Debes ser mayor de 18 años para registrarte"
             return
         }
         
@@ -106,7 +121,7 @@ class RegisterViewModel: ObservableObject {
             // Create the user with the selected games
             let newUser = User(
                 name: username,
-                age: 0,
+                age: age,
                 gender: gender.rawValue,
                 description: "",
                 games: games.map { ($0["nombre"] ?? "", $0["rango"] ?? "Principiante") },

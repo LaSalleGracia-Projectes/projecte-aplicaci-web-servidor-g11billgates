@@ -24,12 +24,13 @@ const Usuario = require('./src/models/usuario');
 const Match = require('./src/models/match');
 const { sendPasswordResetEmail } = require('./src/services/emailService');
 const nodemailer = require('nodemailer');
+const saslprep = require('saslprep');
 
 ffmpeg.setFfmpegPath(ffmpegInstaller.path);
 
 const app = express();
 const port = process.env.PORT || 3001;
-const uri = process.env.MONGODB_URI || "mongodb+srv://rogerjove2005:rogjov01@cluster0.rxxyf.mongodb.net/";
+const uri = process.env.MONGODB_URI || "mongodb+srv://rogerjove2005:rogjov01@cluster0.rxxyf.mongodb.net/Projecte_prova?retryWrites=true&w=majority";
 const dbName = process.env.DB_NAME || "Projecte_prova";
 
 // Configuración de directorios para archivos
@@ -800,12 +801,21 @@ app.post('/register', async (req, res) => {
     try {
         const { Nombre, Correo, Contraseña, Juegos, FotoPerfil, Edad, Region, Descripcion, Genero } = req.body;
         
+        // Validar la edad
+        const edadNum = Number(Edad);
+        if (!edadNum || edadNum < 18) {
+            return res.status(400).json({ 
+                error: 'Debes ser mayor de 18 años para registrarte',
+                code: 'AGE_RESTRICTION'
+            });
+        }
+
         console.log('Datos recibidos en registro:', {
             Nombre,
             Correo,
             Juegos,
             FotoPerfil,
-            Edad,
+            Edad: edadNum,
             Region,
             Descripcion,
             Genero
@@ -864,7 +874,7 @@ app.post('/register', async (req, res) => {
             Correo: String(Correo),
             Contraseña: hashedPassword,
             FotoPerfil: FotoPerfil || "default_profile",
-            Edad: Number(Edad) || 18,
+            Edad: edadNum,
             Region: Region || "Not specified",
             Descripcion: Descripcion || "¡Hola! Me gusta jugar videojuegos.",
             Juegos: formattedGames,
