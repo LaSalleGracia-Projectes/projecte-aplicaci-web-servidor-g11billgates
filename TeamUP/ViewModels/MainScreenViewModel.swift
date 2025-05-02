@@ -1,4 +1,5 @@
 import SwiftUI
+import Combine
 
 class MainScreenViewModel: ObservableObject {
     @Published var currentIndex = 0
@@ -10,6 +11,7 @@ class MainScreenViewModel: ObservableObject {
     
     private let mongoManager = MongoDBManager.shared
     private let authManager = AuthenticationManager.shared
+    private let matchViewModel = MatchViewModel()
     private var currentUserId: String {
         authManager.currentUser?.id ?? ""
     }
@@ -95,8 +97,27 @@ class MainScreenViewModel: ObservableObject {
     func likeUser() async {
         guard currentIndex < users.count else { return }
         let likedUser = users[currentIndex]
-        showMatch = true
-        matchedUser = likedUser
+        
+        if let userId = Int(likedUser.id) {
+            matchViewModel.likeUser(userId: userId)
+            
+            // Mostrar la pantalla de match inmediatamente
+            showMatch = true
+            matchedUser = likedUser
+            
+            // Observar los cambios en el MatchViewModel para manejar errores
+            matchViewModel.$errorMessage
+                .receive(on: DispatchQueue.main)
+                .sink { [weak self] errorMessage in
+                    if !errorMessage.isEmpty {
+                        self?.errorMessage = errorMessage
+                        // Si hay un error, ocultar la pantalla de match
+                        self?.showMatch = false
+                    }
+                }
+                .store(in: &cancellables)
+        }
+        
         currentIndex += 1
     }
     
@@ -115,4 +136,6 @@ class MainScreenViewModel: ObservableObject {
         // Por ejemplo:
         // DatabaseManager.shared.saveMatch(currentUser: currentUser, matchedUser: user)
     }
+    
+    private var cancellables = Set<AnyCancellable>()
 }

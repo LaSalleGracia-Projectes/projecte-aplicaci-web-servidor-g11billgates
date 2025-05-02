@@ -2,107 +2,76 @@ import SwiftUI
 
 struct MatchView: View {
     let matchedUser: User
-    @Binding var isShowing: Bool
+    @Environment(\.dismiss) var dismiss
     
     var body: some View {
         ZStack {
-            // Fondo semi-transparente
             Color.black.opacity(0.8)
-                .edgesIgnoringSafeArea(.all)
+                .ignoresSafeArea()
             
             VStack(spacing: 20) {
-                // Título
-                Text("¡Es un Match!")
-                    .font(.system(size: 32, weight: .bold))
+                Text("¡Es un match!")
+                    .font(.system(size: 40, weight: .bold))
                     .foregroundColor(.white)
                 
-                // Imágenes de perfil
                 HStack(spacing: 20) {
-                    if matchedUser.profileImage.starts(with: "http") {
+                    // User 1 image
+                    Image(systemName: "person.circle.fill")
+                        .resizable()
+                        .frame(width: 100, height: 100)
+                        .foregroundColor(.white)
+                    
+                    // Heart icon
+                    Image(systemName: "heart.fill")
+                        .resizable()
+                        .frame(width: 50, height: 50)
+                        .foregroundColor(.red)
+                    
+                    // Matched user image
+                    if matchedUser.profileImage != "person.circle.fill" {
                         AsyncImage(url: URL(string: matchedUser.profileImage)) { image in
                             image
                                 .resizable()
-                                .aspectRatio(contentMode: .fill)
-                                .frame(width: 120, height: 120)
-                                .clipShape(Circle())
+                                .scaledToFill()
                         } placeholder: {
                             Image(systemName: "person.circle.fill")
                                 .resizable()
-                                .frame(width: 120, height: 120)
-                                .foregroundColor(.gray)
+                                .foregroundColor(.white)
                         }
+                        .frame(width: 100, height: 100)
+                        .clipShape(Circle())
                     } else {
-                        Image(matchedUser.profileImage)
+                        Image(systemName: "person.circle.fill")
                             .resizable()
-                            .aspectRatio(contentMode: .fill)
-                            .frame(width: 120, height: 120)
-                            .clipShape(Circle())
+                            .frame(width: 100, height: 100)
+                            .foregroundColor(.white)
                     }
                 }
                 
-                // Nombre del usuario
-                Text(matchedUser.name)
-                    .font(.system(size: 24, weight: .semibold))
+                Text("Tú y \(matchedUser.name) han coincidido")
+                    .font(.title2)
                     .foregroundColor(.white)
                 
-                // Juegos en común
-                VStack(alignment: .leading, spacing: 8) {
-                    ForEach(matchedUser.games, id: \.0) { game in
-                        HStack {
-                            Text(game.0)
-                                .font(.system(size: 16, weight: .medium))
-                            Text("•")
-                                .foregroundColor(.gray)
-                            Text(game.1)
-                                .font(.system(size: 16))
-                                .foregroundColor(Color(red: 0.9, green: 0.3, blue: 0.2))
-                        }
-                        .padding(.horizontal, 16)
-                        .padding(.vertical, 8)
-                        .background(
-                            RoundedRectangle(cornerRadius: 12)
-                                .fill(Color(.systemGray6))
-                        )
-                    }
-                }
+                Text("¡Empieza a chatear!")
+                    .font(.headline)
+                    .foregroundColor(.white)
                 
-                // Botones
-                HStack(spacing: 20) {
-                    Button(action: {
-                        isShowing = false
-                    }) {
-                        Text("Seguir buscando")
-                            .font(.system(size: 18, weight: .semibold))
-                            .foregroundColor(.white)
-                            .padding(.vertical, 12)
-                            .padding(.horizontal, 24)
-                            .background(Color(red: 0.9, green: 0.3, blue: 0.2))
-                            .cornerRadius(25)
-                    }
-                    
-                    NavigationLink(destination: ChatView(
-                        chatId: UUID().uuidString,
-                        userId: matchedUser.id,
-                        userAge: matchedUser.age,
-                        reportedUserId: matchedUser.id
-                    )) {
-                        Text("Enviar mensaje")
-                            .font(.system(size: 18, weight: .semibold))
-                            .foregroundColor(.white)
-                            .padding(.vertical, 12)
-                            .padding(.horizontal, 24)
-                            .background(Color(red: 0.3, green: 0.8, blue: 0.4))
-                            .cornerRadius(25)
-                    }
+                Button(action: {
+                    dismiss()
+                }) {
+                    Text("Continuar")
+                        .font(.headline)
+                        .foregroundColor(.white)
+                        .frame(maxWidth: .infinity)
+                        .padding()
+                        .background(Color(red: 0.9, green: 0.3, blue: 0.2))
+                        .cornerRadius(10)
                 }
+                .padding(.horizontal, 40)
+                .padding(.top, 20)
             }
-            .padding(32)
-            .background(Color(.systemBackground).opacity(0.9))
-            .cornerRadius(20)
-            .shadow(radius: 10)
+            .padding()
         }
-        .transition(.opacity)
-        .animation(.easeInOut, value: isShowing)
     }
 }
 
@@ -116,7 +85,6 @@ struct MatchView: View {
             description: "¡Hola! Me encanta jugar videojuegos competitivos.",
             games: [("League of Legends", "Diamante"), ("Valorant", "Platino")],
             profileImage: "person.circle.fill"
-        ),
-        isShowing: .constant(true)
+        )
     )
 }

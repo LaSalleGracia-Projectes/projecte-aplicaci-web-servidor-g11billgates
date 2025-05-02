@@ -811,6 +811,12 @@ app.post('/register', async (req, res) => {
             Genero
         });
 
+        // Validar edad
+        const edad = Number(Edad);
+        if (!edad || edad < 18) {
+            return res.status(400).json({ error: 'Debes ser mayor de 18 años para registrarte' });
+        }
+
         const database = client.db(dbName);
         const usuarios = database.collection('usuario');
         
@@ -864,7 +870,7 @@ app.post('/register', async (req, res) => {
             Correo: String(Correo),
             Contraseña: hashedPassword,
             FotoPerfil: FotoPerfil || "default_profile",
-            Edad: Number(Edad) || 18,
+            Edad: edad,
             Region: Region || "Not specified",
             Descripcion: Descripcion || "¡Hola! Me gusta jugar videojuegos.",
             Juegos: formattedGames,
@@ -886,8 +892,8 @@ app.post('/register', async (req, res) => {
             res.status(500).json({ error: 'Failed to register user' });
         }
     } catch (error) {
-        console.error('Registration error:', error);
-        res.status(500).json({ error: 'Error registering user' });
+        console.error('Error en registro:', error);
+        res.status(500).json({ error: 'Error en el servidor' });
     }
 });
 
@@ -2377,5 +2383,85 @@ function formatDate(date) {
     // Si es de otro año
     return messageDate.toLocaleDateString([], { year: 'numeric', month: 'short', day: 'numeric' });
 }
+
+// ... existing code ...
+
+// Endpoint para obtener los puntos de un usuario
+app.get('/api/user/points/:userId', async (req, res) => {
+    try {
+        const { userId } = req.params;
+        const database = client.db(dbName);
+        const usuarios = database.collection('usuario');
+        
+        const user = await usuarios.findOne({ IDUsuario: parseInt(userId) });
+        if (!user) {
+            return res.status(404).json({ error: 'Usuario no encontrado' });
+        }
+
+        // Calcular puntos totales basados en el ELO de todos los juegos
+        let totalPoints = 0;
+        if (user.Juegos && Array.isArray(user.Juegos)) {
+            totalPoints = user.Juegos.reduce((sum, game) => sum + (game.ELO || 0), 0);
+        }
+
+        res.json({ points: totalPoints });
+    } catch (error) {
+        console.error('Error al obtener puntos:', error);
+        res.status(500).json({ error: 'Error interno del servidor' });
+    }
+});
+
+// ... existing code ...
+
+// Endpoint para manejar likes y matches con usuarios de prueba
+app.post('/api/matches/like', authenticateToken, async (req, res) => {
+    try {
+        const { likedUserId } = req.body;
+        const userId = req.user.id;
+
+        // Obtener los usuarios
+        const user = await db.collection('users').findOne({ id: userId });
+        const likedUser = await db.collection('users').findOne({ id: likedUserId });
+
+        if (!user || !likedUser) {
+            return res.status(404).json({ error: 'Usuario no encontrado' });
+        }
+
+        // Crear el match
+        const match = {
+            user1Id: userId,
+            user2Id: likedUserId,
+            createdAt: new Date()
+        };
+
+        // Guardar el match en la base de datos
+        await db.collection('matches').insertOne(match);
+
+        // Crear un chat entre los usuarios
+        const chat = {
+            participants: [userId, likedUserId],
+            messages: [],
+            createdAt: new Date()
+        };
+
+        // Guardar el chat en la base de datos
+        await db.collection('chats').insertOne(chat);
+
+        res.json({
+            success: true,
+            match: {
+                id: match._id,
+                user1: user,
+                user2: likedUser
+            },
+            chat: {
+                id: chat._id
+            }
+        });
+    } catch (error) {
+        console.error('Error al procesar el like:', error);
+        res.status(500).json({ error: 'Error interno del servidor' });
+    }
+});
 
 // ... existing code ...
