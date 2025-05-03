@@ -10,6 +10,7 @@ struct User: Identifiable, Decodable {
     var profileImage: String
     var likes: [String] = []
     var matches: [String] = []
+    var swipes: Int = 0
     
     enum CodingKeys: String, CodingKey {
         case id = "_id"
@@ -21,9 +22,10 @@ struct User: Identifiable, Decodable {
         case profileImage = "FotoPerfil"
         case likes
         case matches
+        case swipes
     }
     
-    init(id: String = UUID().uuidString, name: String, age: Int, gender: String, description: String, games: [(String, String)], profileImage: String, likes: [String] = [], matches: [String] = []) {
+    init(id: String = UUID().uuidString, name: String, age: Int, gender: String, description: String, games: [(String, String)], profileImage: String, likes: [String] = [], matches: [String] = [], swipes: Int = 0) {
         self.id = id
         self.name = name
         self.age = age
@@ -33,6 +35,7 @@ struct User: Identifiable, Decodable {
         self.profileImage = profileImage
         self.likes = likes
         self.matches = matches
+        self.swipes = swipes
     }
     
     init(from decoder: Decoder) throws {
@@ -52,6 +55,7 @@ struct User: Identifiable, Decodable {
         profileImage = try container.decode(String.self, forKey: .profileImage)
         likes = try container.decodeIfPresent([String].self, forKey: .likes) ?? []
         matches = try container.decodeIfPresent([String].self, forKey: .matches) ?? []
+        swipes = try container.decodeIfPresent(Int.self, forKey: .swipes) ?? 0
         
         // Decode games with their correct structure
         let gamesData = try container.decode([[String: String]].self, forKey: .games)
