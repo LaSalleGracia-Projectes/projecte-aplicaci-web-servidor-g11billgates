@@ -24,14 +24,24 @@ struct LoginView: View {
                 
                 // Campos de entrada
                 VStack(spacing: 15) {
-                    TextField("Email o nombre de usuario", text: $identifier)
-                        .textFieldStyle(RoundedBorderTextFieldStyle())
-                        .autocapitalization(.none)
-                        .autocorrectionDisabled()
-                        .keyboardType(.emailAddress)
+                    VStack(alignment: .leading, spacing: 5) {
+                        Text("Email o nombre de usuario")
+                            .font(.system(size: 14))
+                            .foregroundColor(.gray)
+                        TextField("", text: $identifier)
+                            .textFieldStyle(RoundedBorderTextFieldStyle())
+                            .autocapitalization(.none)
+                            .autocorrectionDisabled()
+                            .keyboardType(.emailAddress)
+                    }
                     
-                    SecureField("Contraseña", text: $password)
-                        .textFieldStyle(RoundedBorderTextFieldStyle())
+                    VStack(alignment: .leading, spacing: 5) {
+                        Text("Contraseña")
+                            .font(.system(size: 14))
+                            .foregroundColor(.gray)
+                        SecureField("", text: $password)
+                            .textFieldStyle(RoundedBorderTextFieldStyle())
+                    }
                 }
                 .padding(.horizontal, 32)
                 .padding(.top, 32)
