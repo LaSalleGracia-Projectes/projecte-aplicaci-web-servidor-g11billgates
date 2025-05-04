@@ -14,13 +14,23 @@ struct ChangePasswordView: View {
                     .padding(.top, 30)
                 
                 VStack(spacing: 15) {
-                    SecureField("Nueva contraseña", text: $newPassword)
-                        .textFieldStyle(RoundedBorderTextFieldStyle())
-                        .padding(.horizontal)
+                    VStack(alignment: .leading, spacing: 5) {
+                        Text("Contraseña")
+                            .font(.system(size: 14))
+                            .foregroundColor(.gray)
+                        SecureField("", text: $newPassword)
+                            .textFieldStyle(RoundedBorderTextFieldStyle())
+                    }
+                    .padding(.horizontal)
                     
-                    SecureField("Confirmar nueva contraseña", text: $confirmPassword)
-                        .textFieldStyle(RoundedBorderTextFieldStyle())
-                        .padding(.horizontal)
+                    VStack(alignment: .leading, spacing: 5) {
+                        Text("Confirmar nueva contraseña")
+                            .font(.system(size: 14))
+                            .foregroundColor(.gray)
+                        SecureField("", text: $confirmPassword)
+                            .textFieldStyle(RoundedBorderTextFieldStyle())
+                    }
+                    .padding(.horizontal)
                 }
                 
                 Button(action: {
