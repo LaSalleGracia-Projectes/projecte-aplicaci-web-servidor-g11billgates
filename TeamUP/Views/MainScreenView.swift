@@ -6,8 +6,6 @@ struct MainScreenView: View {
     @State private var showDislikeOverlay = false
     @State private var showSettings = false
     @State private var selectedUser: User?
-    @State private var showMatchView = false
-    @State private var matchedUser: User?
     @State private var currentUserIndex = 0
     @State private var offset: CGSize = .zero
     @State private var swipeCount = 0
@@ -44,9 +42,9 @@ struct MainScreenView: View {
             .sheet(item: $selectedUser) { user in
                 UserDetailView(user: user)
             }
-            .fullScreenCover(isPresented: $showMatchView) {
-                if let matchedUser = matchedUser {
-                    MatchView(matchedUser: matchedUser, isShowing: $showMatchView)
+            .fullScreenCover(isPresented: $viewModel.showMatch) {
+                if let matchedUser = viewModel.matchedUser {
+                    MatchView(matchedUser: matchedUser, isShowing: $viewModel.showMatch)
                 }
             }
         }
@@ -119,33 +117,29 @@ struct CardStackView: View {
     
     private func handleSwipe(gesture: DragGesture.Value, user: User) {
         let horizontalAmount = gesture.translation.width
-        let verticalAmount = gesture.translation.height
         
-        if abs(horizontalAmount) > 100 || abs(verticalAmount) > 100 {
-            if horizontalAmount > 0 {
-                // Like
-                Task {
-                    do {
-                        swipeCount = try await UserService.shared.incrementSwipes(userId: user.id)
-                        await viewModel.likeUser()
-                    } catch {
-                        print("Error liking user: \(error)")
-                    }
-                }
-            } else {
-                // Dislike
-                Task {
-                    do {
-                        swipeCount = try await UserService.shared.incrementSwipes(userId: user.id)
-                        await viewModel.dislikeUser()
-                    } catch {
-                        print("Error incrementing swipes: \(error)")
-                    }
-                }
+        if horizontalAmount > 100 {
+            // Like
+            Task {
+                await viewModel.likeUser()
             }
             
             withAnimation {
-                offset = CGSize(width: horizontalAmount > 0 ? 500 : -500, height: 0)
+                offset = CGSize(width: 500, height: 0)
+            }
+            
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
+                currentIndex += 1
+                offset = .zero
+            }
+        } else if horizontalAmount < -100 {
+            // Dislike
+            Task {
+                await viewModel.dislikeUser()
+            }
+            
+            withAnimation {
+                offset = CGSize(width: -500, height: 0)
             }
             
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
