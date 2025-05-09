@@ -79,17 +79,25 @@ struct ChatRowView: View {
         }) {
             HStack(spacing: 12) {
                 // Imagen de perfil
-                AsyncImage(url: URL(string: chat.profileImage)) { image in
-                    image
+                if chat.profileImage.starts(with: "http") {
+                    AsyncImage(url: URL(string: chat.profileImage)) { image in
+                        image
+                            .resizable()
+                            .aspectRatio(contentMode: .fill)
+                    } placeholder: {
+                        Image(systemName: "person.circle.fill")
+                            .resizable()
+                            .aspectRatio(contentMode: .fit)
+                    }
+                    .frame(width: 50, height: 50)
+                    .clipShape(Circle())
+                } else {
+                    Image(chat.profileImage)
                         .resizable()
                         .aspectRatio(contentMode: .fill)
-                } placeholder: {
-                    Image(systemName: "person.circle.fill")
-                        .resizable()
-                        .aspectRatio(contentMode: .fit)
+                        .frame(width: 50, height: 50)
+                        .clipShape(Circle())
                 }
-                .frame(width: 50, height: 50)
-                .clipShape(Circle())
                 
                 VStack(alignment: .leading, spacing: 4) {
                     Text(chat.username)

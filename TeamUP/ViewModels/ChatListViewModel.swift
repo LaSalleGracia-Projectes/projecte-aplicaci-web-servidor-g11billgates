@@ -108,7 +108,7 @@ class ChatListViewModel: ObservableObject {
                 username: "Marc",
                 lastMessage: "¡Hola! ¿Quieres jugar una partida?",
                 timestamp: "10:30",
-                profileImage: "https://api.dicebear.com/7.x/avataaars/svg?seed=Marc",
+                profileImage: "DwarfTestIcon",
                 participants: ["1", currentUserId],
                 isHidden: false
             ),
@@ -117,7 +117,7 @@ class ChatListViewModel: ObservableObject {
                 username: "Roger",
                 lastMessage: "¿A qué hora quedamos para jugar?",
                 timestamp: "09:15",
-                profileImage: "https://api.dicebear.com/7.x/avataaars/svg?seed=Roger",
+                profileImage: "CatTestIcon",
                 participants: ["2", currentUserId],
                 isHidden: false
             ),
@@ -126,7 +126,7 @@ class ChatListViewModel: ObservableObject {
                 username: "Pau",
                 lastMessage: "¡Buena partida!",
                 timestamp: "Ayer",
-                profileImage: "https://api.dicebear.com/7.x/avataaars/svg?seed=Pau",
+                profileImage: "DogTestIcon",
                 participants: ["3", currentUserId],
                 isHidden: false
             ),
@@ -135,7 +135,7 @@ class ChatListViewModel: ObservableObject {
                 username: "Jordi",
                 lastMessage: "¿Jugamos otra?",
                 timestamp: "Lunes",
-                profileImage: "https://api.dicebear.com/7.x/avataaars/svg?seed=Jordi",
+                profileImage: "ToadTestIcon",
                 participants: ["4", currentUserId],
                 isHidden: false
             )
