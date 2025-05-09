@@ -160,15 +160,23 @@ struct CardView: View {
     var body: some View {
         VStack {
             // User Image
-            AsyncImage(url: URL(string: user.profileImage)) { image in
-                image
+            if user.profileImage.starts(with: "http") {
+                AsyncImage(url: URL(string: user.profileImage)) { image in
+                    image
+                        .resizable()
+                        .aspectRatio(contentMode: .fill)
+                } placeholder: {
+                    Color.gray
+                }
+                .frame(height: 400)
+                .clipped()
+            } else {
+                Image(user.profileImage)
                     .resizable()
                     .aspectRatio(contentMode: .fill)
-            } placeholder: {
-                Color.gray
+                    .frame(height: 400)
+                    .clipped()
             }
-            .frame(height: 400)
-            .clipped()
             
             // User Info
             VStack(alignment: .leading, spacing: 8) {
