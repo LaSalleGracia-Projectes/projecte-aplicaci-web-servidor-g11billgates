@@ -98,6 +98,24 @@ class MainScreenViewModel: ObservableObject {
         showMatch = true
         matchedUser = likedUser
         currentIndex += 1
+        
+        // Crear un nuevo chat automáticamente
+        let newChat = ChatPreview(
+            id: UUID().uuidString,
+            username: likedUser.name,
+            lastMessage: "¡Hola! ¡Tenemos un match!",
+            timestamp: "Ahora",
+            profileImage: likedUser.profileImage,
+            participants: [currentUserId, likedUser.id],
+            isHidden: false
+        )
+        
+        // Notificar que se ha creado un nuevo chat
+        NotificationCenter.default.post(
+            name: NSNotification.Name("NewChatAdded"),
+            object: nil,
+            userInfo: ["chat": newChat, "user": likedUser]
+        )
     }
     
     @MainActor
