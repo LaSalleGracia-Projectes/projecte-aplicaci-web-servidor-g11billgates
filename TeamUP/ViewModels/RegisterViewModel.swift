@@ -118,18 +118,27 @@ class RegisterViewModel: ObservableObject {
                 profileImageUrl = result.imageUrl
             }
             
+            // Crear una descripción inicial basada en los juegos seleccionados
+            let gameNames = selectedGames.map { $0.name }.joined(separator: ", ")
+            let initialDescription = "¡Hola! Me encanta jugar \(gameNames). ¡Busquemos equipo juntos!"
+            
             // Create the user with the selected games
             let newUser = User(
                 name: username,
                 age: age,
                 gender: gender.rawValue,
-                description: "",
+                description: initialDescription,
                 games: games.map { ($0["nombre"] ?? "", $0["rango"] ?? "Principiante") },
                 profileImage: profileImageUrl
             )
             
             // Register user in MongoDB
             try await authManager.register(user: newUser, email: email, password: password)
+            
+            // Actualizar el usuario actual en el AuthenticationManager
+            await MainActor.run {
+                authManager.currentUser = newUser
+            }
             
             print("Usuario registrado exitosamente en MongoDB")
             isRegistering = false
