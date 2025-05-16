@@ -23,7 +23,8 @@ struct MyTabView: View {
                     Label("Chat", systemImage: "bubble")
                 }
             
-            MyUserView(user: authManager.currentUser ?? User(name: "", age: 18, gender: "", description: "", games: [], profileImage: "default_profile"))
+            MyUserView(user: authManager.currentUser)
+                .id(authManager.currentUser?.id ?? "no-user")
                 .tabItem {
                     Label("User", systemImage: "person")
                 }

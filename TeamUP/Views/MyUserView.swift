@@ -12,34 +12,25 @@ struct MyUserView: View {
     @EnvironmentObject var authManager: AuthenticationManager
     
     let genderOptions = ["Hombre", "Mujer", "Otro"]
-    let isEmptyUser: Bool
     
-    init(user: User) {
-        _viewModel = StateObject(wrappedValue: UserViewModel(user: user))
-        isEmptyUser = user.name.isEmpty && user.description.isEmpty && user.games.isEmpty
+    init(user: User?) {
+        if let user = user {
+            _viewModel = StateObject(wrappedValue: UserViewModel(user: user))
+        } else {
+            _viewModel = StateObject(wrappedValue: UserViewModel(user: User(name: "", age: 18, gender: "", description: "", games: [], profileImage: "default_profile")))
+        }
     }
     
     var body: some View {
-        if isEmptyUser {
+        if viewModel.user.name.isEmpty && viewModel.user.description.isEmpty && viewModel.user.games.isEmpty {
             VStack(spacing: 24) {
                 Image(systemName: "person.crop.circle.badge.exclam")
                     .resizable()
                     .frame(width: 80, height: 80)
                     .foregroundColor(.gray)
-                Text("No has iniciado sesión")
+                Text("No hay usuario disponible")
                     .font(.title2)
                     .foregroundColor(.gray)
-                Button(action: {
-                    authManager.logout()
-                }) {
-                    Text("Volver a iniciar sesión")
-                        .foregroundColor(.white)
-                        .padding()
-                        .frame(maxWidth: .infinity)
-                        .background(Color(red: 0.9, green: 0.3, blue: 0.2))
-                        .cornerRadius(10)
-                }
-                .padding(.horizontal, 32)
             }
             .padding()
         } else {
@@ -56,7 +47,6 @@ struct MyUserView: View {
                                 .foregroundColor(Color(red: 0.9, green: 0.3, blue: 0.2))
                             Spacer()
                         }
-                        
                         HStack {
                             Spacer()
                             Button(action: {
@@ -72,7 +62,6 @@ struct MyUserView: View {
                     .padding(.vertical, 8)
                     .background(Color(.systemBackground))
                     .shadow(color: .black.opacity(0.2), radius: 5, y: 2)
-                    
                     ScrollView {
                         VStack(spacing: 20) {
                             // Imagen de perfil
@@ -101,7 +90,6 @@ struct MyUserView: View {
                                         .clipShape(Circle())
                                         .overlay(Circle().stroke(Color(red: 0.9, green: 0.3, blue: 0.2), lineWidth: 3))
                                 }
-                                
                                 if viewModel.isEditingProfile {
                                     Button(action: {
                                         showImagePicker = true
@@ -110,7 +98,6 @@ struct MyUserView: View {
                                             Circle()
                                                 .fill(Color(red: 0.9, green: 0.3, blue: 0.2))
                                                 .frame(width: 36, height: 36)
-                                            
                                             Image(systemName: "camera.fill")
                                                 .foregroundColor(.white)
                                                 .font(.system(size: 18))
@@ -120,7 +107,6 @@ struct MyUserView: View {
                                 }
                             }
                             .padding(.top, 20)
-                            
                             // Información del usuario
                             VStack(spacing: 20) {
                                 if viewModel.isEditingProfile {
@@ -129,44 +115,36 @@ struct MyUserView: View {
                                         Text("Información personal")
                                             .font(.system(size: 18, weight: .semibold))
                                             .padding(.horizontal, 16)
-                                        
                                         VStack(spacing: 12) {
                                             // Nombre
                                             VStack(alignment: .leading, spacing: 4) {
                                                 Text("Nombre")
                                                     .font(.caption)
                                                     .foregroundColor(.gray)
-                                                
                                                 TextField("Nombre", text: $tempName)
                                                     .padding(10)
                                                     .background(Color(.systemGray6))
                                                     .cornerRadius(8)
                                             }
-                                            
                                             // Edad
                                             VStack(alignment: .leading, spacing: 4) {
                                                 Text("Edad")
                                                     .font(.caption)
                                                     .foregroundColor(.gray)
-                                                
                                                 HStack {
                                                     Text("\(tempAge) años")
-                                                    
                                                     Spacer()
-                                                    
                                                     Stepper("", value: $tempAge, in: 18...100)
                                                 }
                                                 .padding(10)
                                                 .background(Color(.systemGray6))
                                                 .cornerRadius(8)
                                             }
-                                            
                                             // Género
                                             VStack(alignment: .leading, spacing: 4) {
                                                 Text("Género")
                                                     .font(.caption)
                                                     .foregroundColor(.gray)
-                                                
                                                 Picker("Género", selection: $tempGender) {
                                                     ForEach(genderOptions, id: \.self) { option in
                                                         Text(option).tag(option)
@@ -185,7 +163,6 @@ struct MyUserView: View {
                                     VStack(spacing: 8) {
                                         Text(viewModel.user.name)
                                             .font(.system(size: 24, weight: .bold))
-                                        
                                         HStack {
                                             Text("\(viewModel.user.age) años")
                                             Text("•")
@@ -196,15 +173,12 @@ struct MyUserView: View {
                                     }
                                 }
                             }
-                            
                             // Biografía
                             VStack(alignment: .leading, spacing: 10) {
                                 HStack {
                                     Text("Biografía")
                                         .font(.system(size: 18, weight: .semibold))
-                                    
                                     Spacer()
-                                    
                                     if viewModel.isEditingProfile {
                                         // Ya tenemos botones de guardar/cancelar abajo
                                     } else {
@@ -215,7 +189,6 @@ struct MyUserView: View {
                                     }
                                 }
                                 .padding(.horizontal, 16)
-                                
                                 if viewModel.isEditingProfile {
                                     TextEditor(text: $viewModel.tempBio)
                                         .frame(height: 100)
@@ -234,15 +207,12 @@ struct MyUserView: View {
                                 }
                             }
                             .padding(.top, 10)
-                            
                             // Juegos
                             VStack(alignment: .leading, spacing: 10) {
                                 HStack {
                                     Text("Mis juegos")
                                         .font(.system(size: 18, weight: .semibold))
-                                    
                                     Spacer()
-                                    
                                     if viewModel.isEditingProfile {
                                         Button("Añadir") {
                                             showGameSelector = true
@@ -251,7 +221,6 @@ struct MyUserView: View {
                                     }
                                 }
                                 .padding(.horizontal, 16)
-                                
                                 if viewModel.selectedGames.isEmpty {
                                     Text("No has añadido ningún juego")
                                         .font(.system(size: 16))
@@ -271,11 +240,9 @@ struct MyUserView: View {
                                                 .padding(4)
                                                 .background(Color.white.opacity(0.2))
                                                 .cornerRadius(8)
-                                            
                                             VStack(alignment: .leading, spacing: 4) {
                                                 Text(game.name)
                                                     .font(.system(size: 16, weight: .semibold))
-                                                
                                                 if viewModel.isEditingProfile {
                                                     Picker("Rango", selection: Binding(
                                                         get: { game.selectedRank ?? game.ranks.first ?? "" },
@@ -292,9 +259,7 @@ struct MyUserView: View {
                                                         .foregroundColor(.gray)
                                                 }
                                             }
-                                            
                                             Spacer()
-                                            
                                             if viewModel.isEditingProfile {
                                                 Button(action: {
                                                     viewModel.removeGame(at: index)
@@ -312,7 +277,6 @@ struct MyUserView: View {
                                 }
                             }
                             .padding(.top, 10)
-                            
                             // Botones de edición
                             if viewModel.isEditingProfile {
                                 HStack(spacing: 20) {
@@ -327,7 +291,6 @@ struct MyUserView: View {
                                             .background(Color(.systemGray5))
                                             .cornerRadius(10)
                                     }
-                                    
                                     Button(action: {
                                         saveChanges()
                                     }) {
@@ -344,11 +307,9 @@ struct MyUserView: View {
                                 .padding(.top, 20)
                                 .padding(.bottom, 30)
                             }
-                            
                             Spacer(minLength: 30)
                         }
                     }
-
                     // Botón de cerrar sesión
                     Button(action: {
                         viewModel.logout()
