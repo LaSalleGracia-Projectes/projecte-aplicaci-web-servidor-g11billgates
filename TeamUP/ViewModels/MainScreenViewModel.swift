@@ -73,7 +73,6 @@ class MainScreenViewModel: ObservableObject {
         isLoading = true
         errorMessage = nil
         
-        // Obtener los juegos del usuario actual
         guard let currentUser = authManager.currentUser else {
             users = []
             isLoading = false
@@ -83,26 +82,29 @@ class MainScreenViewModel: ObservableObject {
         
         let currentUserGames = Set(currentUser.games.map { $0.0 })
         
-        // Usuarios de decoy filtrados por juegos en común
-        let filteredDecoy = defaultUsers.filter { user in
+        // Unir decoy y reales (sin duplicados y sin el usuario actual)
+        var allUsers: [User] = defaultUsers
+        do {
+            let realUsers = try await mongoManager.getRegisteredUsers()
+            let filteredRealUsers = realUsers.filter { realUser in
+                realUser.name != currentUser.name && !defaultUsers.contains(where: { $0.name == realUser.name })
+            }
+            allUsers.append(contentsOf: filteredRealUsers)
+        } catch {
+            print("Error cargando usuarios reales: \(error)")
+        }
+        
+        // Separar por juegos en común
+        let withCommonGames = allUsers.filter { user in
             let userGames = Set(user.games.map { $0.0 })
             return !userGames.intersection(currentUserGames).isEmpty
         }
-        
-        // Añadir usuarios reales de la base de datos
-        var filteredRealUsers: [User] = []
-        do {
-            let realUsers = try await mongoManager.getRegisteredUsers()
-            // Evitar duplicados por nombre y no mostrar al usuario actual
-            filteredRealUsers = realUsers.filter { realUser in
-                realUser.name != currentUser.name && !filteredDecoy.contains(where: { $0.name == realUser.name })
-            }
-        } catch {
-            print("Error cargando usuarios reales: \(error)")
-            // Si falla, solo muestra los decoy
+        let withoutCommonGames = allUsers.filter { user in
+            let userGames = Set(user.games.map { $0.0 })
+            return userGames.intersection(currentUserGames).isEmpty
         }
         
-        users = filteredDecoy + filteredRealUsers
+        users = withCommonGames + withoutCommonGames
         currentIndex = 0
         isLoading = false
     }
