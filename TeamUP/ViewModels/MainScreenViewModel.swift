@@ -82,12 +82,29 @@ class MainScreenViewModel: ObservableObject {
         
         let currentUserGames = Set(currentUser.games.map { $0.0 })
         
+        // Imágenes por defecto para usuarios reales
+        let defaultImages = [
+            "DwarfTestIcon",
+            "ToadTestIcon",
+            "TerroristTestIcon",
+            "CatTestIcon"
+        ]
+        
         // Unir decoy y reales (sin duplicados y sin el usuario actual)
         var allUsers: [User] = defaultUsers
         do {
             let realUsers = try await mongoManager.getRegisteredUsers()
             let filteredRealUsers = realUsers.filter { realUser in
                 realUser.name != currentUser.name && !defaultUsers.contains(where: { $0.name == realUser.name })
+            }.map { user in
+                // Si el usuario no tiene imagen, asigna una aleatoria
+                if user.profileImage == "default_profile" || user.profileImage.isEmpty {
+                    var newUser = user
+                    newUser.profileImage = defaultImages.randomElement() ?? "DwarfTestIcon"
+                    return newUser
+                } else {
+                    return user
+                }
             }
             allUsers.append(contentsOf: filteredRealUsers)
         } catch {
