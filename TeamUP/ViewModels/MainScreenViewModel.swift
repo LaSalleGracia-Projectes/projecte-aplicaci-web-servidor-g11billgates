@@ -77,17 +77,33 @@ class MainScreenViewModel: ObservableObject {
         guard let currentUser = authManager.currentUser else {
             users = []
             isLoading = false
+            currentIndex = 0
             return
         }
         
         let currentUserGames = Set(currentUser.games.map { $0.0 })
         
-        // Filtrar usuarios que tengan al menos un juego en común
-        users = defaultUsers.filter { user in
+        // Usuarios de decoy filtrados por juegos en común
+        let filteredDecoy = defaultUsers.filter { user in
             let userGames = Set(user.games.map { $0.0 })
             return !userGames.intersection(currentUserGames).isEmpty
         }
         
+        // Añadir usuarios reales de la base de datos
+        var filteredRealUsers: [User] = []
+        do {
+            let realUsers = try await mongoManager.getRegisteredUsers()
+            // Evitar duplicados por nombre y no mostrar al usuario actual
+            filteredRealUsers = realUsers.filter { realUser in
+                realUser.name != currentUser.name && !filteredDecoy.contains(where: { $0.name == realUser.name })
+            }
+        } catch {
+            print("Error cargando usuarios reales: \(error)")
+            // Si falla, solo muestra los decoy
+        }
+        
+        users = filteredDecoy + filteredRealUsers
+        currentIndex = 0
         isLoading = false
     }
     
@@ -97,7 +113,9 @@ class MainScreenViewModel: ObservableObject {
         let likedUser = users[currentIndex]
         showMatch = true
         matchedUser = likedUser
-        currentIndex += 1
+        // Eliminar la tarjeta actual
+        users.remove(at: currentIndex)
+        // No incrementes currentIndex
         
         // Crear un nuevo chat automáticamente
         let newChat = ChatPreview(
@@ -120,7 +138,10 @@ class MainScreenViewModel: ObservableObject {
     
     @MainActor
     func dislikeUser() async {
-        currentIndex += 1
+        guard currentIndex < users.count else { return }
+        // Eliminar la tarjeta actual
+        users.remove(at: currentIndex)
+        // No incrementes currentIndex
     }
     
     func resetIndex() {

@@ -105,26 +105,19 @@ struct CardStackView: View {
     @ObservedObject var viewModel: MainScreenViewModel
     
     var body: some View {
-        ZStack {
-            ForEach(Array(users.enumerated()), id: \.element.id) { index, user in
-                if index >= currentIndex {
-                    CardView(user: user)
-                        .offset(index == currentIndex ? offset : .zero)
-                        .rotationEffect(.degrees(index == currentIndex ? Double(offset.width / 20) : 0))
-                        .scaleEffect(index == currentIndex ? 1.0 : 0.9)
-                        .gesture(
-                            DragGesture()
-                                .onChanged { gesture in
-                                    if index == currentIndex {
-                                        offset = gesture.translation
-                                    }
-                                }
-                                .onEnded { gesture in
-                                    handleSwipe(gesture: gesture, user: user)
-                                }
-                        )
-                }
-            }
+        if let user = users.first {
+            CardView(user: user)
+                .offset(offset)
+                .rotationEffect(.degrees(Double(offset.width / 20)))
+                .gesture(
+                    DragGesture()
+                        .onChanged { gesture in
+                            offset = gesture.translation
+                        }
+                        .onEnded { gesture in
+                            handleSwipe(gesture: gesture, user: user)
+                        }
+                )
         }
     }
     
