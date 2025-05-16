@@ -23,12 +23,10 @@ struct MyTabView: View {
                     Label("Chat", systemImage: "bubble")
                 }
             
-            if let currentUser = authManager.currentUser {
-                MyUserView(user: currentUser)
-                    .tabItem {
-                        Label("User", systemImage: "person")
-                    }
-            }
+            MyUserView(user: authManager.currentUser ?? User(name: "", age: 18, gender: "", description: "", games: [], profileImage: "default_profile"))
+                .tabItem {
+                    Label("User", systemImage: "person")
+                }
         }
         .tabViewStyle(.automatic)
         .accentColor(Color(red: 0.9, green: 0.3, blue: 0.2))

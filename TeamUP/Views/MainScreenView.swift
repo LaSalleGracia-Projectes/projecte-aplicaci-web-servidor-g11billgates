@@ -56,6 +56,7 @@ struct MainScreenView: View {
 
 struct HeaderView: View {
     let swipeCount: Int
+    @State private var showSettings = false
     
     var body: some View {
         HStack {
@@ -79,8 +80,20 @@ struct HeaderView: View {
             .background(Color(.systemBackground))
             .cornerRadius(10)
             .shadow(color: .black.opacity(0.1), radius: 5, y: 2)
+            
+            Button(action: {
+                showSettings = true
+            }) {
+                Image(systemName: "gear")
+                    .font(.system(size: 20))
+                    .foregroundColor(Color(red: 0.9, green: 0.3, blue: 0.2))
+            }
+            .padding(.leading, 8)
         }
         .padding()
+        .sheet(isPresented: $showSettings) {
+            SettingsView()
+        }
     }
 }
 
